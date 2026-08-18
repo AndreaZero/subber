@@ -4,7 +4,7 @@ import {
   languageName,
 } from "../lib/files";
 import { saveHistory } from "../lib/history";
-import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel } from "../lib/pipeline";
+import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel, isActiveStatus } from "../lib/pipeline";
 import { useStudio } from "../lib/useStudio";
 import { BootGate } from "../ui/BootGate";
 import { Button } from "../ui/Button";
@@ -20,12 +20,15 @@ import {
 } from "../ui/icons";
 import { IconButton } from "../ui/IconButton";
 import { Popover, useMenuPoint } from "../ui/Popover";
+import { QueueWidget } from "../ui/QueueWidget";
+import { RunMeter } from "../ui/RunMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { StudioFloor } from "../ui/StudioFloor";
 import { ToastViewport } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { GlossaryView } from "../views/GlossaryView";
 import { HistoryView } from "../views/HistoryView";
+import { JobsView } from "../views/JobsView";
 import { SettingsView } from "../views/SettingsView";
 import "../styles/tokens.css";
 import "../styles/ui.css";
@@ -122,18 +125,60 @@ export default function StudioApp() {
             <span>Sub editor</span>
           </div>
         </div>
-        {nav.map((item) => (
-          <Tooltip key={item.id} label={item.label}>
-            <button
-              type="button"
-              className={`nav-btn ${studio.nav === item.id ? "is-on" : ""}`}
-              onClick={() => studio.setNav(item.id)}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          </Tooltip>
-        ))}
+        <nav className="sidebar-nav">
+          {nav.map((item) => (
+            <Tooltip key={item.id} label={item.label}>
+              <button
+                type="button"
+                className={`nav-btn ${studio.nav === item.id ? "is-on" : ""}`}
+                onClick={() => studio.setNav(item.id)}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            </Tooltip>
+          ))}
+        </nav>
+        <div className="sidebar-work">
+          <QueueWidget
+            videos={studio.videos}
+            selectedPath={studio.selectedPath}
+            locked={studio.locked}
+            working={studio.working}
+            adding={studio.adding}
+            compact={!studio.sidebarOpen}
+            uiLang={uiLang}
+            tr={tr}
+            onAdd={() => void studio.onPickFiles()}
+            onSelect={(path) => {
+              studio.setSelectedPath(path);
+              studio.setNav("home");
+            }}
+            onRemove={(path) => studio.setRemovePath(path)}
+            onRetry={(video) => void studio.runPipeline([video])}
+            onCancel={studio.requestCancel}
+            onCopy={(path, title) => void studio.copyText(path, title)}
+            onOpenFolder={(path) => void studio.openFolder(path)}
+            onImportDavinci={(video) => void studio.importToDavinci(video)}
+          />
+          <RunMeter
+            active={studio.working || studio.mode === "processing" || studio.mode === "completed"}
+            compact={!studio.sidebarOpen}
+            working={studio.working}
+            progress={studio.progress}
+            phase={studio.phase}
+            elapsedSecs={studio.elapsedSecs}
+            name={
+              studio.videos.find((video) => isActiveStatus(video.status))?.name ?? studio.selected?.name
+            }
+            done={studio.mode === "completed"}
+            outputDir={studio.outputDir}
+            uiLang={uiLang}
+            tr={tr}
+            onStop={studio.requestCancel}
+            onOpenFolder={() => void studio.openFolder(studio.outputDir)}
+          />
+        </div>
         <div className="sidebar-foot">
           <IconButton
             label={studio.sidebarOpen ? tr("collapseSidebar") : tr("expandSidebar")}
@@ -148,9 +193,14 @@ export default function StudioApp() {
         <header className="topbar">
           <div className="topbar-title">
             <h1>
-              {studio.mode === "empty"
-                ? tr("studio")
-                : tr("interviewsCount", { n: studio.videos.length })}
+              {studio.mode === "empty" ? tr("studio") : tr("interviewsCount", { n: studio.videos.length })}
+              {studio.videos.length > 0 && !studio.working && !preparing ? (
+                <span className="topbar-status">
+                  {studio.videos.length === 1
+                    ? tr("studioReadyOne")
+                    : tr("studioReadyMany", { n: studio.videos.length })}
+                </span>
+              ) : null}
             </h1>
             <p>
               {preparing
@@ -160,6 +210,98 @@ export default function StudioApp() {
                   : tr("tagline")}
             </p>
           </div>
+          {showTools ? (
+            <div
+              className="topbar-tools"
+              onContextMenu={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("select, input, textarea")) {
+                  return;
+                }
+                toolsMenu.onContextMenu(event);
+              }}
+            >
+              <div className="lang-pair">
+                <select
+                  value={studio.spokenLang}
+                  disabled={studio.working || preparing}
+                  onChange={(event) => studio.setSpokenLang(event.target.value)}
+                  aria-label={tr("spokenLanguage")}
+                >
+                  {SPOKEN_LANGUAGES.map((lang) => (
+                    <option key={lang.id} value={lang.id}>
+                      {languageName(lang.id, uiLang)}
+                    </option>
+                  ))}
+                </select>
+                <em>{studio.needsTranslation ? "→" : "="}</em>
+                <select
+                  value={studio.outputLang}
+                  disabled={studio.working || preparing}
+                  onChange={(event) => studio.setOutputLang(event.target.value)}
+                  aria-label={tr("subtitleLanguage")}
+                >
+                  {OUTPUT_LANGUAGES.map((lang) => (
+                    <option key={lang.id} value={lang.id}>
+                      {languageName(lang.id, uiLang)}
+                    </option>
+                  ))}
+                </select>
+                {!studio.needsTranslation ? <span className="lang-same">{tr("sameLangNote")}</span> : null}
+              </div>
+              <SegmentedControl
+                value={studio.quality}
+                disabled={studio.working || preparing}
+                options={QUALITY_PRESETS.map((item) => ({
+                  id: item.id,
+                  label: qualityLabel(item.id, uiLang),
+                }))}
+                onChange={confirmQuality}
+              />
+              <Popover
+                open={toolsMenu.point != null}
+                x={toolsMenu.point?.x}
+                y={toolsMenu.point?.y}
+                onClose={toolsMenu.close}
+              >
+                {QUALITY_PRESETS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    disabled={studio.working || preparing}
+                    onClick={() => {
+                      confirmQuality(item.id);
+                      toolsMenu.close();
+                    }}
+                  >
+                    {qualityLabel(item.id, uiLang)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    toolsMenu.close();
+                    if (studio.outputDir) {
+                      void studio.openFolder(studio.outputDir);
+                    } else {
+                      void studio.onPickOutput();
+                    }
+                  }}
+                >
+                  {tr("cmdOutput")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toolsMenu.close();
+                    studio.setNav("settings");
+                  }}
+                >
+                  {tr("navSettings")}
+                </button>
+              </Popover>
+            </div>
+          ) : null}
           <div className="topbar-cluster">
             <SegmentedControl
               value={uiLang}
@@ -172,103 +314,23 @@ export default function StudioApp() {
             <Button variant="ghost" className="cmd-hint" onClick={() => studio.setCommandOpen(true)}>
               Ctrl+K
             </Button>
-            <Button
-              variant="primary"
-              disabled={studio.locked || preparing || studio.videos.length === 0}
-              onClick={() => void studio.runPipeline()}
-            >
-              {studio.working ? phaseLabel(studio.phase, uiLang) : tr("start")}
-            </Button>
+            {showTools ? (
+              <Button
+                variant="primary"
+                disabled={studio.locked || preparing || studio.videos.length === 0}
+                onClick={() => void studio.runPipeline()}
+              >
+                {studio.working
+                  ? studio.phase === "extract" && studio.progress < 8
+                    ? tr("startingWork")
+                    : phaseLabel(studio.phase, uiLang)
+                  : tr("start")}
+              </Button>
+            ) : null}
           </div>
         </header>
 
-        {showTools ? (
-          <div
-            className="tools"
-            onContextMenu={(event) => {
-              const target = event.target as HTMLElement;
-              if (target.closest("select, input, textarea")) {
-                return;
-              }
-              toolsMenu.onContextMenu(event);
-            }}
-          >
-            <div className="lang-pair">
-              <select
-                value={studio.spokenLang}
-                disabled={studio.working || preparing}
-                onChange={(event) => studio.setSpokenLang(event.target.value)}
-              >
-                {SPOKEN_LANGUAGES.map((lang) => (
-                  <option key={lang.id} value={lang.id}>
-                    {languageName(lang.id, uiLang)}
-                  </option>
-                ))}
-              </select>
-              <em>{studio.needsTranslation ? "→" : "="}</em>
-              <select
-                value={studio.outputLang}
-                disabled={studio.working || preparing}
-                onChange={(event) => studio.setOutputLang(event.target.value)}
-              >
-                {OUTPUT_LANGUAGES.map((lang) => (
-                  <option key={lang.id} value={lang.id}>
-                    {languageName(lang.id, uiLang)}
-                  </option>
-                ))}
-              </select>
-              {!studio.needsTranslation ? <span className="lang-same">{tr("sameLangNote")}</span> : null}
-            </div>
-            <SegmentedControl
-              value={studio.quality}
-              disabled={studio.working || preparing}
-              options={QUALITY_PRESETS.map((item) => ({
-                id: item.id,
-                label: qualityLabel(item.id, uiLang),
-              }))}
-              onChange={confirmQuality}
-            />
-            <Popover open={toolsMenu.point != null} x={toolsMenu.point?.x} y={toolsMenu.point?.y} onClose={toolsMenu.close}>
-              {QUALITY_PRESETS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  disabled={studio.working || preparing}
-                  onClick={() => {
-                    confirmQuality(item.id);
-                    toolsMenu.close();
-                  }}
-                >
-                  {qualityLabel(item.id, uiLang)}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  toolsMenu.close();
-                  if (studio.outputDir) {
-                    void studio.openFolder(studio.outputDir);
-                  } else {
-                    void studio.onPickOutput();
-                  }
-                }}
-              >
-                {tr("cmdOutput")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  toolsMenu.close();
-                  studio.setNav("settings");
-                }}
-              >
-                {tr("navSettings")}
-              </button>
-            </Popover>
-          </div>
-        ) : null}
-
-        <main className={`workspace ${showTools ? "is-studio" : ""}`}>
+        <main className={`workspace ${studio.nav === "home" ? "is-studio" : ""}`}>
           <div className="workspace-inner">
             {studio.nav === "glossary" ? (
               <GlossaryView
@@ -318,8 +380,10 @@ export default function StudioApp() {
               />
             ) : null}
 
-            {studio.nav === "home" || studio.nav === "jobs" ? (
-              <StudioFloor studio={studio} pair={pair} preparing={preparing} />
+            {studio.nav === "jobs" ? <JobsView studio={studio} /> : null}
+
+            {studio.nav === "home" ? (
+              <StudioFloor studio={studio} pair={pair} />
             ) : null}
           </div>
         </main>

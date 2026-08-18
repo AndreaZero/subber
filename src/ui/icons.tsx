@@ -183,3 +183,30 @@ export function IconVolume() {
     </Svg>
   );
 }
+
+export function IconScript() {
+  return (
+    <Svg>
+      <rect x="6" y="3" width="12" height="18" rx="2" />
+      <path d="M9 8h6M9 12h6M9 16h4" />
+    </Svg>
+  );
+}
+
+export function IconSkipBack() {
+  return (
+    <Svg>
+      <path d="M18 6 10 12l8 6z" fill="currentColor" stroke="none" />
+      <path d="M6 6v12" />
+    </Svg>
+  );
+}
+
+export function IconSkipFwd() {
+  return (
+    <Svg>
+      <path d="M6 6v12l8-6z" fill="currentColor" stroke="none" />
+      <path d="M18 6v12" />
+    </Svg>
+  );
+}

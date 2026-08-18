@@ -61,7 +61,7 @@ function JobCardView({
   const hue = hashHue(video.name);
   const percent = Math.round(video.percent ?? (video.status === "translated" ? 100 : 0));
   const error = video.status === "error" && video.error ? friendlyError(video.error, uiLang) : null;
-  const live = video.status === "transcribing";
+  const live = video.status === "transcribing" || video.status === "extracting";
   const translating = showTranslation && video.status === "translating";
   const done = video.status === "translated";
   const frames = video.frames ?? [];

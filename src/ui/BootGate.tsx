@@ -75,9 +75,7 @@ export function BootGate({ prepare, checking, error, uiLang, tr, onRetry, onUiLa
     ? error
     : live.message
       ? live.message
-      : checking
-        ? tr("bootChecking")
-        : tr("bootLead");
+      : tr("bootChecking");
 
   return (
     <div className="boot-gate">
@@ -88,7 +86,6 @@ export function BootGate({ prepare, checking, error, uiLang, tr, onRetry, onUiLa
         </div>
         <p className="kicker">{tr("bootKicker")}</p>
         <h1>{tr("bootTitle")}</h1>
-        <p className="muted">{tr("bootLead")}</p>
         <div className="boot-progress">
           <Progress value={error ? 0 : percent} busy={busy} />
           <p>

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
 import { formatMediaDuration } from "../lib/files";
 import type { Msg } from "../lib/i18n";
 import { mediaSrc } from "../lib/media";
@@ -9,6 +9,8 @@ import {
   IconMute,
   IconPause,
   IconPlay,
+  IconSkipBack,
+  IconSkipFwd,
   IconVolume,
 } from "./icons";
 import { Popover, useMenuPoint } from "./Popover";
@@ -32,14 +34,34 @@ type Props = {
   videoPath?: string;
   poster?: string;
   tr: Tr;
+  children?: ReactNode;
+  extraActions?: PlayerMenuAction[];
+  fallbackReady?: boolean;
   onTime?: (time: number) => void;
+  onDuration?: (duration: number) => void;
+  onUnavailable?: (failed: boolean) => void;
   onPlay?: () => void;
   onPause?: () => void;
-  extraActions?: PlayerMenuAction[];
+  onSeek?: (time: number) => void;
+  onFallbackToggle?: () => void;
 };
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPlayer(
-  { videoPath, poster, tr, onTime, onPlay, onPause, extraActions },
+  {
+    videoPath,
+    poster,
+    tr,
+    children,
+    extraActions,
+    fallbackReady,
+    onTime,
+    onDuration,
+    onUnavailable,
+    onPlay,
+    onPause,
+    onSeek,
+    onFallbackToggle,
+  },
   ref,
 ) {
   const src = useMemo(() => mediaSrc(videoPath), [videoPath]);
@@ -50,6 +72,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
   const [failed, setFailed] = useState(false);
   const [wide, setWide] = useState(false);
   const [ratio, setRatio] = useState<number | null>(null);
@@ -82,6 +105,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
   }, [src]);
 
   useEffect(() => {
+    onUnavailable?.(failed);
+  }, [failed, onUnavailable]);
+
+  useEffect(() => {
     if (!posterSrc) {
       return;
     }
@@ -102,6 +129,13 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.volume = muted ? 0 : volume;
+    }
+  }, [muted, volume]);
+
   function applySize(width: number, height: number) {
     if (width > 0 && height > 0) {
       setRatio(width / height);
@@ -109,8 +143,12 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
   }
 
   function toggle() {
+    if (failed) {
+      onFallbackToggle?.();
+      return;
+    }
     const video = videoRef.current;
-    if (!video || failed) {
+    if (!video) {
       return;
     }
     if (video.paused) {
@@ -136,113 +174,158 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     }
   }
 
+  function seekTo(next: number) {
+    if (videoRef.current) {
+      videoRef.current.currentTime = next;
+    }
+    setTime(next);
+    onTime?.(next);
+    onSeek?.(next);
+  }
+
   const ar = ratio && ratio > 0 ? ratio : 16 / 9;
-  const portrait = !wide && ar < 0.95;
+  const canPlay = Boolean((src && !failed) || (failed && fallbackReady));
 
   return (
     <div
       ref={boxRef}
-      className={`video-player ${wide ? "is-wide" : ""} ${portrait ? "is-portrait" : "is-landscape"}`}
+      className={`video-player ${wide ? "is-wide" : ""}`}
       style={{ ["--video-ar" as string]: String(ar) }}
       onContextMenu={menu.onContextMenu}
     >
-      <div className="video-screen" onDoubleClick={() => void toggleWide()}>
-        {src && !failed ? (
-          <video
-            ref={videoRef}
-            src={src}
-            poster={posterSrc || undefined}
-            preload="metadata"
-            playsInline
-            muted={muted}
-            onClick={toggle}
-            onPlay={() => {
-              setPlaying(true);
-              onPlay?.();
-            }}
-            onPause={() => {
-              setPlaying(false);
-              onPause?.();
-            }}
-            onLoadedMetadata={(event) => {
-              const node = event.currentTarget;
-              setDuration(node.duration || 0);
-              applySize(node.videoWidth, node.videoHeight);
-            }}
-            onTimeUpdate={(event) => {
-              const at = event.currentTarget.currentTime;
-              setTime(at);
-              onTime?.(at);
-            }}
-            onError={() => setFailed(true)}
-          />
-        ) : posterSrc ? (
-          <img
-            src={posterSrc}
-            alt=""
-            onLoad={(event) => applySize(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
-          />
-        ) : (
-          <div className="video-empty" />
-        )}
-        {failed ? <p className="video-fallback">{tr("videoUnavailable")}</p> : null}
-        <button
-          type="button"
-          className="video-hit"
-          onClick={toggle}
-          onDoubleClick={() => void toggleWide()}
-          aria-label={playing ? tr("playerPause") : tr("playerPlay")}
-        >
-          {playing ? null : (
-            <span>
-              <IconPlay />
-            </span>
-          )}
-        </button>
-      </div>
-      <div className="video-bar">
-        <IconButton label={playing ? tr("playerPause") : tr("playerPlay")} onClick={toggle} disabled={!src || failed}>
-          {playing ? <IconPause /> : <IconPlay />}
-        </IconButton>
-        <div className="audio-meter">
-          <input
-            type="range"
-            min={0}
-            max={Math.max(duration, 0.01)}
-            step={0.05}
-            value={Math.min(time, duration || time)}
-            disabled={!src || failed}
-            onChange={(event) => {
-              const next = Number(event.target.value);
-              if (videoRef.current) {
-                videoRef.current.currentTime = next;
+      <div className="video-stack">
+        <div className="video-screen" onDoubleClick={() => void toggleWide()}>
+          {src && !failed ? (
+            <video
+              ref={videoRef}
+              src={src}
+              poster={posterSrc || undefined}
+              preload="metadata"
+              playsInline
+              muted={muted}
+              onClick={toggle}
+              onPlay={() => {
+                setPlaying(true);
+                onPlay?.();
+              }}
+              onPause={() => {
+                setPlaying(false);
+                onPause?.();
+              }}
+              onLoadedMetadata={(event) => {
+                const node = event.currentTarget;
+                const next = node.duration || 0;
+                setDuration(next);
+                onDuration?.(next);
+                applySize(node.videoWidth, node.videoHeight);
+              }}
+              onTimeUpdate={(event) => {
+                const at = event.currentTarget.currentTime;
+                setTime(at);
+                onTime?.(at);
+              }}
+              onError={() => setFailed(true)}
+            />
+          ) : posterSrc ? (
+            <img
+              src={posterSrc}
+              alt=""
+              onLoad={(event) =>
+                applySize(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
               }
-              setTime(next);
-              onTime?.(next);
-            }}
-            aria-label={tr("playerSeek")}
-          />
-          <p>
-            <time>{formatMediaDuration(time)}</time>
-            <span>/</span>
-            <time>{formatMediaDuration(duration)}</time>
-          </p>
+            />
+          ) : (
+            <div className="video-empty" />
+          )}
+          {failed ? <p className="video-fallback">{tr("videoUnavailable")}</p> : null}
+          <button
+            type="button"
+            className="video-hit"
+            onClick={toggle}
+            onDoubleClick={() => void toggleWide()}
+            aria-label={playing ? tr("playerPause") : tr("playerPlay")}
+          >
+            {playing ? null : (
+              <span>
+                <IconPlay />
+              </span>
+            )}
+          </button>
         </div>
-        <IconButton
-          label={muted ? tr("playerUnmute") : tr("playerMute")}
-          active={muted}
-          onClick={() => setMuted((value) => !value)}
-        >
-          {muted ? <IconMute /> : <IconVolume />}
-        </IconButton>
-        <IconButton label={wide ? tr("exitFullscreen") : tr("fullscreen")} onClick={() => void toggleWide()}>
-          {wide ? <IconFullscreenExit /> : <IconFullscreen />}
-        </IconButton>
+        <div className="player-controls">
+          <div className="player-seek">
+            <time>{formatMediaDuration(time)}</time>
+            <input
+              type="range"
+              min={0}
+              max={Math.max(duration, 0.01)}
+              step={0.05}
+              value={Math.min(time, duration || time)}
+              disabled={!canPlay}
+              onChange={(event) => seekTo(Number(event.target.value))}
+              aria-label={tr("playerSeek")}
+            />
+            <time>{formatMediaDuration(duration)}</time>
+          </div>
+          <div className="player-actions">
+            <div className="player-transport">
+              <IconButton
+                label={tr("playerBack")}
+                onClick={() => seekTo(Math.max(0, time - 10))}
+                disabled={!canPlay}
+              >
+                <IconSkipBack />
+              </IconButton>
+              <IconButton
+                label={playing ? tr("playerPause") : tr("playerPlay")}
+                onClick={toggle}
+                disabled={!canPlay}
+              >
+                {playing ? <IconPause /> : <IconPlay />}
+              </IconButton>
+              <IconButton
+                label={tr("playerFwd")}
+                onClick={() => seekTo(duration > 0 ? Math.min(duration, time + 10) : time + 10)}
+                disabled={!canPlay}
+              >
+                <IconSkipFwd />
+              </IconButton>
+            </div>
+            <div className="player-end">
+              <div className="player-vol">
+                <IconButton
+                  label={muted ? tr("playerUnmute") : tr("playerMute")}
+                  active={muted}
+                  onClick={() => setMuted((value) => !value)}
+                >
+                  {muted ? <IconMute /> : <IconVolume />}
+                </IconButton>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={muted ? 0 : volume}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setVolume(next);
+                    setMuted(next === 0);
+                  }}
+                  aria-label={tr("playerVolume")}
+                />
+              </div>
+              <IconButton label={wide ? tr("exitFullscreen") : tr("fullscreen")} onClick={() => void toggleWide()}>
+                {wide ? <IconFullscreenExit /> : <IconFullscreen />}
+              </IconButton>
+            </div>
+          </div>
+        </div>
+        {children}
       </div>
       <Popover open={menu.point != null} x={menu.point?.x} y={menu.point?.y} onClose={menu.close}>
         <button
           type="button"
-          disabled={!src || failed}
+          disabled={!canPlay}
           onClick={() => {
             toggle();
             menu.close();

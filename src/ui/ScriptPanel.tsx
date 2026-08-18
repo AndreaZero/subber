@@ -67,7 +67,6 @@ export function ScriptPanel({
 
   return (
     <div className="script-panel">
-      {editable ? <p className="muted">{tr("editHint")}</p> : null}
       {hasTranslation ? (
         <SegmentedControl
           value={view}

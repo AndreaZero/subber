@@ -39,12 +39,20 @@
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 20px;
+  --space-5: 24px;
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
   --space-16: 64px;
+
+  --card-pad: var(--space-6);
+  --card-radius: var(--radius-lg);
+  --chrome-x: var(--space-6);
+  --thumb-sm: 36px;
+  --mini-h: 200px;
+  --queue-h: 248px;
+  --queue-item: 48px;
 
   --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 10px 30px rgba(0, 0, 0, 0.28);
@@ -70,7 +78,7 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
   --sidebar: 72px;
-  --sidebar-open: 212px;
+  --sidebar-open: 228px;
   --topbar: 56px;
 
   --focus: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent);

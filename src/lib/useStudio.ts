@@ -804,34 +804,32 @@ export function useStudio() {
       return;
     }
 
-    try {
-      const status = await engineStatus(quality);
-      setEngine(status);
-      if (!status.ffmpegOk) {
-        toast("error", tr("toastEngineFfmpeg"), status.ffmpegPath ?? undefined);
-        return;
-      }
-      if (!status.whisperOk || !status.whisperReady) {
-        toast("error", tr("toastEngineWhisper"));
-        if (!preparingRef.current) {
-          void downloadModels("whisper");
-        }
-        return;
-      }
-      if (needsTranslation && (!status.translateOk || !status.translateReady)) {
-        toast("warning", tr("toastModelsFirst"));
-        if (!preparingRef.current) {
-          void downloadModels("all");
-        }
-        return;
-      }
-    } catch (error) {
-      toast("error", tr("toastStopped"), error instanceof Error ? error.message : String(error));
-      return;
-    }
-
     const paths = batch.map((video) => video.path);
     const folder = outputDir.trim();
+    const previous = new Map(
+      batch.map((video) => [
+        video.path.toLowerCase(),
+        {
+          status: video.status,
+          percent: video.percent,
+          message: video.message,
+          error: video.error,
+        },
+      ]),
+    );
+
+    function abortStart() {
+      setWorking(false);
+      setPhase(null);
+      setStartedAt(null);
+      setVideos((current) =>
+        current.map((video) => {
+          const snap = previous.get(video.path.toLowerCase());
+          return snap ? { ...video, ...snap } : video;
+        }),
+      );
+    }
+
     cancelRef.current = false;
     setWorking(true);
     setPhase("extract");
@@ -843,8 +841,52 @@ export function useStudio() {
         paths.some((path) => samePath(path, video.path))
           ? {
               ...video,
-              status: "queued",
-              percent: 0,
+              status: "extracting",
+              percent: Math.max(video.percent ?? 0, 3),
+              message: tr("startingWork"),
+              error: undefined,
+            }
+          : video,
+      ),
+    );
+
+    try {
+      const status = await engineStatus(quality);
+      setEngine(status);
+      if (!status.ffmpegOk) {
+        abortStart();
+        toast("error", tr("toastEngineFfmpeg"), status.ffmpegPath ?? undefined);
+        return;
+      }
+      if (!status.whisperOk || !status.whisperReady) {
+        abortStart();
+        toast("error", tr("toastEngineWhisper"));
+        if (!preparingRef.current) {
+          void downloadModels("whisper");
+        }
+        return;
+      }
+      if (needsTranslation && (!status.translateOk || !status.translateReady)) {
+        abortStart();
+        toast("warning", tr("toastModelsFirst"));
+        if (!preparingRef.current) {
+          void downloadModels("all");
+        }
+        return;
+      }
+    } catch (error) {
+      abortStart();
+      toast("error", tr("toastStopped"), error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    setVideos((current) =>
+      current.map((video) =>
+        paths.some((path) => samePath(path, video.path))
+          ? {
+              ...video,
+              status: "extracting",
+              percent: Math.max(video.percent ?? 0, 6),
               error: undefined,
               jsonPath: undefined,
               folderPath: undefined,
@@ -857,7 +899,7 @@ export function useStudio() {
               skipTranslation: undefined,
               spokenCode: undefined,
               outputCode: undefined,
-              message: undefined,
+              message: tr("jobExtracting"),
             }
           : video,
       ),
