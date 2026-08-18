@@ -13,6 +13,8 @@ import {
   type ExtractProgress,
   type LangCode,
   type ListedVideo,
+  type PreparePart,
+  type PrepareProgress,
   type QualityPreset,
   type ScriptFile,
   type ScriptSegment,
@@ -27,6 +29,7 @@ import {
   inspectVideos,
   pickOutputDir,
   pickVideoFiles,
+  prepareModels,
   previewVideos,
   readScript,
   saveScript,
@@ -48,6 +51,16 @@ import { createToast, type ToastItem } from "./toasts";
 import { loadUiLang, saveUiLang, t, type Msg, type UiLang } from "./i18n";
 
 const SIDEBAR_KEY = "video-sub.sidebar.open";
+const AUTO_MODELS_KEY = "video-sub.models.auto";
+
+let prepareLock = false;
+
+export type PrepareState = {
+  active: boolean;
+  part: string;
+  message: string;
+  percent: number;
+};
 
 export function useStudio() {
   const [videos, setVideos] = useState<ListedVideo[]>([]);
@@ -78,9 +91,12 @@ export function useStudio() {
   const [scriptLoading, setScriptLoading] = useState(false);
   const [scriptSaving, setScriptSaving] = useState(false);
   const [engine, setEngine] = useState<EngineStatus | null>(null);
+  const [prepare, setPrepare] = useState<PrepareState | null>(null);
 
   const workingRef = useRef(false);
   const cancelRef = useRef(false);
+  const preparingRef = useRef(false);
+  const autoTriedRef = useRef(false);
   workingRef.current = working;
 
   const locked = adding || working;
@@ -110,6 +126,70 @@ export function useStudio() {
 
   const log = useCallback((line: string) => {
     setLogs((current) => [...current.slice(-180), `${new Date().toLocaleTimeString()}  ${line}`]);
+  }, []);
+
+  const refreshEngine = useCallback(async () => {
+    try {
+      const status = await engineStatus(quality);
+      setEngine(status);
+      return status;
+    } catch {
+      setEngine(null);
+      return null;
+    }
+  }, [quality]);
+
+  const downloadModels = useCallback(
+    async (parts: PreparePart = "all") => {
+      if (preparingRef.current || workingRef.current || prepareLock) {
+        return;
+      }
+      preparingRef.current = true;
+      prepareLock = true;
+      localStorage.removeItem(AUTO_MODELS_KEY);
+      setPrepare({
+        active: true,
+        part: parts === "translate" ? "translate" : "whisper",
+        message: tr("setupDownloading"),
+        percent: 0,
+      });
+      log("prepare: start");
+      try {
+        const result = await prepareModels(quality, parts);
+        setPrepare({
+          active: false,
+          part: "engine",
+          message: tr("setupReady"),
+          percent: 100,
+        });
+        const status = await engineStatus(quality);
+        setEngine(status);
+        if (result.modelsReady || status.modelsReady) {
+          toast("success", tr("toastModelsReady"));
+        }
+      } catch (error) {
+        setPrepare({
+          active: false,
+          part: "engine",
+          message: error instanceof Error ? error.message : String(error),
+          percent: 0,
+        });
+        toast(
+          "error",
+          tr("toastModelsFail"),
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        preparingRef.current = false;
+        prepareLock = false;
+      }
+    },
+    [quality, toast, tr, log],
+  );
+
+  const deferModels = useCallback(() => {
+    localStorage.setItem(AUTO_MODELS_KEY, "0");
+    autoTriedRef.current = true;
   }, []);
 
   const copyText = useCallback(
@@ -189,10 +269,35 @@ export function useStudio() {
   }, [glossary]);
 
   useEffect(() => {
-    void engineStatus()
-      .then(setEngine)
-      .catch(() => setEngine(null));
-  }, []);
+    autoTriedRef.current = false;
+  }, [quality]);
+
+  useEffect(() => {
+    void refreshEngine();
+  }, [refreshEngine]);
+
+  useEffect(() => {
+    if (!engine) {
+      return;
+    }
+    if (preparingRef.current || workingRef.current) {
+      return;
+    }
+    if (!engine.pythonOk || !engine.whisperOk) {
+      return;
+    }
+    if (engine.modelsReady) {
+      return;
+    }
+    if (localStorage.getItem(AUTO_MODELS_KEY) === "0") {
+      return;
+    }
+    if (autoTriedRef.current) {
+      return;
+    }
+    autoTriedRef.current = true;
+    void downloadModels("all");
+  }, [engine, downloadModels]);
 
   useEffect(() => {
     if (!scriptPath) {
@@ -304,6 +409,35 @@ export function useStudio() {
           };
         }),
       );
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [log]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    listen<PrepareProgress>("prepare-progress", (event) => {
+      const payload = event.payload;
+      if (payload.message) {
+        log(`${payload.part}: ${payload.message}`);
+      }
+      setPrepare({
+        active: payload.status !== "done" && payload.status !== "error",
+        part: payload.part,
+        message: payload.message,
+        percent: payload.percent ?? 0,
+      });
     }).then((fn) => {
       if (disposed) {
         fn();
@@ -610,7 +744,7 @@ export function useStudio() {
     }
 
     try {
-      const status = await engineStatus();
+      const status = await engineStatus(quality);
       setEngine(status);
       if (!status.ffmpegOk) {
         toast("error", tr("toastEngineFfmpeg"), status.ffmpegPath ?? undefined);
@@ -618,6 +752,13 @@ export function useStudio() {
       }
       if (!status.whisperOk) {
         toast("error", tr("toastEngineWhisper"));
+        return;
+      }
+      if (!status.modelsReady) {
+        toast("warning", tr("toastModelsFirst"));
+        if (!preparingRef.current) {
+          void downloadModels("all");
+        }
         return;
       }
     } catch (error) {
@@ -770,7 +911,7 @@ export function useStudio() {
         return;
       }
 
-      const translateReady = await engineStatus();
+      const translateReady = await engineStatus(quality);
       setEngine(translateReady);
       if (!translateReady.translateOk && spokenLang !== outputLang) {
         toast("error", tr("toastEngineTranslate"));
@@ -982,6 +1123,9 @@ export function useStudio() {
     scriptLoading,
     scriptSaving,
     engine,
+    prepare,
+    downloadModels,
+    deferModels,
     uiLang,
     setUiLang,
     tr,

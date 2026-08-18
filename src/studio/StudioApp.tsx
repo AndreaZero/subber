@@ -5,7 +5,6 @@ import {
   formatMediaDuration,
   languageName,
 } from "../lib/files";
-import { readHardware } from "../lib/hardware";
 import { saveHistory } from "../lib/history";
 import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel } from "../lib/pipeline";
 import { useStudio } from "../lib/useStudio";
@@ -25,6 +24,7 @@ import {
 import { IconButton } from "../ui/IconButton";
 import { JobCard } from "../ui/JobCard";
 import { Metric } from "../ui/Metric";
+import { ModelSetup } from "../ui/ModelSetup";
 import { Progress } from "../ui/Progress";
 import { ScriptPanel } from "../ui/ScriptPanel";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -39,9 +39,9 @@ import "../styles/app.css";
 
 export default function StudioApp() {
   const studio = useStudio();
-  const hardware = readHardware();
   const { tr, uiLang } = studio;
-  const showContext = Boolean(studio.selected) && studio.nav !== "settings";
+  const preparing = Boolean(studio.prepare?.active);
+  const showTools = studio.nav === "home" || studio.nav === "jobs";
   const pair = `${langShort(studio.spokenLang, uiLang)} → ${langShort(studio.outputLang, uiLang)}`;
   const nav = [
     { id: "home" as const, label: tr("navHome"), icon: <IconHome /> },
@@ -84,6 +84,12 @@ export default function StudioApp() {
       label: tr("cmdTerm"),
       run: () => studio.setNav("glossary"),
     },
+    {
+      id: "prepare",
+      label: tr("cmdPrepare"),
+      hint: tr("cmdPrepareHint"),
+      run: () => void studio.downloadModels("all"),
+    },
     { id: "settings", label: tr("navSettings"), run: () => studio.setNav("settings") },
     {
       id: "cancel",
@@ -93,9 +99,7 @@ export default function StudioApp() {
   ];
 
   return (
-    <div
-      className={`shell ${studio.sidebarOpen ? "is-wide" : ""} ${showContext ? "has-context" : ""}`}
-    >
+    <div className={`shell ${studio.sidebarOpen ? "is-wide" : ""}`}>
       <aside className="sidebar">
         <div className="brand">
           <img className="brand-mark" src="/icon.png" alt="" width={32} height={32} />
@@ -135,16 +139,41 @@ export default function StudioApp() {
                 : tr("interviewsCount", { n: studio.videos.length })}
             </h1>
             <p>
-              {studio.working
-                ? `${phaseLabel(studio.phase, uiLang)} · ${Math.round(studio.progress)}%`
-                : tr("tagline")}
+              {preparing
+                ? `${tr("setupDownloading")} · ${Math.round(studio.prepare?.percent ?? 0)}%`
+                : studio.working
+                  ? `${phaseLabel(studio.phase, uiLang)} · ${Math.round(studio.progress)}%`
+                  : tr("tagline")}
             </p>
           </div>
           <div className="topbar-cluster">
+            <SegmentedControl
+              value={uiLang}
+              options={[
+                { id: "it", label: "IT" },
+                { id: "en", label: "EN" },
+              ]}
+              onChange={studio.setUiLang}
+            />
+            <Button variant="ghost" className="cmd-hint" onClick={() => studio.setCommandOpen(true)}>
+              Ctrl+K
+            </Button>
+            <Button
+              variant="primary"
+              disabled={studio.locked || preparing || studio.videos.length === 0}
+              onClick={() => void studio.runPipeline()}
+            >
+              {studio.working ? phaseLabel(studio.phase, uiLang) : tr("start")}
+            </Button>
+          </div>
+        </header>
+
+        {showTools ? (
+          <div className="tools">
             <div className="lang-pair">
               <select
                 value={studio.spokenLang}
-                disabled={studio.working}
+                disabled={studio.working || preparing}
                 onChange={(event) => studio.setSpokenLang(event.target.value)}
               >
                 {SPOKEN_LANGUAGES.map((lang) => (
@@ -156,7 +185,7 @@ export default function StudioApp() {
               <em>→</em>
               <select
                 value={studio.outputLang}
-                disabled={studio.working}
+                disabled={studio.working || preparing}
                 onChange={(event) => studio.setOutputLang(event.target.value)}
               >
                 {OUTPUT_LANGUAGES.map((lang) => (
@@ -168,50 +197,15 @@ export default function StudioApp() {
             </div>
             <SegmentedControl
               value={studio.quality}
-              disabled={studio.working}
+              disabled={studio.working || preparing}
               options={QUALITY_PRESETS.map((item) => ({
                 id: item.id,
                 label: qualityLabel(item.id, uiLang),
               }))}
               onChange={confirmQuality}
             />
-            <SegmentedControl
-              value={uiLang}
-              options={[
-                { id: "it", label: "IT" },
-                { id: "en", label: "EN" },
-              ]}
-              onChange={studio.setUiLang}
-            />
-            {studio.working ? (
-              <div className="hw-strip">
-                <Metric
-                  label={tr("cpu")}
-                  value={
-                    hardware.cpuThreads ? tr("threads", { n: hardware.cpuThreads }) : "—"
-                  }
-                />
-                <Metric
-                  label={tr("ram")}
-                  value={
-                    hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : tr("thisPc")
-                  }
-                />
-                <Metric label={tr("gpu")} value={tr("gpuCpu")} />
-              </div>
-            ) : null}
-            <Button variant="ghost" onClick={() => studio.setCommandOpen(true)}>
-              Ctrl+K
-            </Button>
-            <Button
-              variant="primary"
-              disabled={studio.locked || studio.videos.length === 0}
-              onClick={() => void studio.runPipeline()}
-            >
-              {studio.working ? phaseLabel(studio.phase, uiLang) : tr("start")}
-            </Button>
           </div>
-        </header>
+        ) : null}
 
         <main className="workspace">
           <div className="workspace-inner">
@@ -239,8 +233,8 @@ export default function StudioApp() {
                 outputLang={studio.outputLang}
                 quality={studio.quality}
                 outputDir={studio.outputDir}
-                locked={studio.locked}
-                working={studio.working}
+                locked={studio.locked || preparing}
+                working={studio.working || preparing}
                 advancedOpen={studio.advancedOpen}
                 logs={studio.logs}
                 phase={studio.phase}
@@ -256,6 +250,8 @@ export default function StudioApp() {
                 onToggleAdvanced={() => studio.setAdvancedOpen((open) => !open)}
                 onUiLang={studio.setUiLang}
                 engine={studio.engine}
+                prepare={studio.prepare}
+                onDownloadModels={studio.downloadModels}
               />
             ) : null}
 
@@ -263,6 +259,16 @@ export default function StudioApp() {
               <>
                 {studio.mode === "empty" && studio.nav === "home" ? (
                   <div className="empty-home">
+                    <ModelSetup
+                      variant="card"
+                      engine={studio.engine}
+                      prepare={studio.prepare}
+                      quality={studio.quality}
+                      locked={studio.working}
+                      tr={tr}
+                      onDownload={studio.downloadModels}
+                      onDefer={studio.deferModels}
+                    />
                     <DropZone
                       dragging={studio.dragging}
                       disabled={studio.locked}
@@ -277,7 +283,7 @@ export default function StudioApp() {
                       </div>
                     </DropZone>
                     {studio.adding ? (
-                      <div className="job-list" style={{ width: "min(100%, 640px)", marginTop: 24 }}>
+                      <div className="job-list" style={{ width: "min(100%, 640px)", marginTop: 8 }}>
                         <div className="ui-skel" style={{ height: 88 }} />
                         <div className="ui-skel" style={{ height: 88 }} />
                       </div>
@@ -285,6 +291,15 @@ export default function StudioApp() {
                   </div>
                 ) : (
                   <>
+                    <ModelSetup
+                      variant="banner"
+                      engine={studio.engine}
+                      prepare={studio.prepare}
+                      quality={studio.quality}
+                      locked={studio.working}
+                      tr={tr}
+                      onDownload={studio.downloadModels}
+                    />
                     <DropZone
                       compact
                       dragging={studio.dragging}
@@ -303,9 +318,9 @@ export default function StudioApp() {
                         {studio.failCount > 0 ? (
                           <Metric label={tr("metricFailed")} value={`${studio.failCount}`} />
                         ) : null}
-                        <div>
+                        <div className="run-banner-main">
                           <Progress value={studio.progress} mint={studio.phase === "translate"} />
-                          <div className="stats" style={{ marginTop: 10 }}>
+                          <div className="stats">
                             <Metric label={tr("metricElapsed")} value={formatClock(studio.elapsedSecs)} />
                             {studio.processedSecs > 0 ? (
                               <Metric
@@ -352,7 +367,7 @@ export default function StudioApp() {
                     </div>
 
                     {studio.mode === "completed" ? (
-                      <div className="done-cta" style={{ marginTop: 18 }}>
+                      <div className="done-cta">
                         <Button
                           variant="primary"
                           onClick={() => void studio.copyText(studio.outputDir, tr("copyFolder"))}
@@ -361,6 +376,39 @@ export default function StudioApp() {
                         </Button>
                       </div>
                     ) : null}
+
+                    {studio.videos.length > 0 ? (
+                      <section className="editor-dock">
+                        <div className="editor-head">
+                          {studio.selected?.frames && studio.selected.frames.length > 0 ? (
+                            <div className="editor-frames">
+                              {studio.selected.frames.map((frame, index) => (
+                                <img key={index} src={frame} alt="" />
+                              ))}
+                            </div>
+                          ) : null}
+                          <div>
+                            <p className="kicker">{tr("editDockTitle")}</p>
+                            <h2>{studio.selected?.name ?? tr("editDockPick")}</h2>
+                            <p className="muted">
+                              {studio.selected?.parentDir ?? tr("editDockHint")}
+                            </p>
+                          </div>
+                        </div>
+                        {studio.selected ? (
+                          <ScriptPanel
+                            script={studio.script}
+                            loading={studio.scriptLoading}
+                            editable={!studio.working && Boolean(studio.script)}
+                            saving={studio.scriptSaving}
+                            tr={tr}
+                            onSave={(segments) => void studio.saveEdits(segments)}
+                          />
+                        ) : (
+                          <p className="muted">{tr("editDockHint")}</p>
+                        )}
+                      </section>
+                    ) : null}
                   </>
                 )}
               </>
@@ -368,60 +416,6 @@ export default function StudioApp() {
           </div>
         </main>
       </div>
-
-      {showContext && studio.selected ? (
-        <aside className="context">
-          <h2>{tr("context")}</h2>
-          {studio.selected.frames && studio.selected.frames.length > 0 ? (
-            <div className="context-block">
-              <div className="context-frames">
-                {studio.selected.frames.map((frame, index) => (
-                  <img key={index} src={frame} alt="" />
-                ))}
-              </div>
-            </div>
-          ) : null}
-          <div className="context-block">
-            <strong>{studio.selected.name}</strong>
-            <p className="muted">{studio.selected.parentDir}</p>
-          </div>
-          <div className="context-block">
-            <ScriptPanel
-              script={studio.script}
-              loading={studio.scriptLoading}
-              editable={!studio.working && Boolean(studio.script)}
-              saving={studio.scriptSaving}
-              tr={tr}
-              onSave={(segments) => void studio.saveEdits(segments)}
-            />
-          </div>
-          <div className="context-block">
-            <div className="hw-strip" style={{ display: "flex" }}>
-              <Metric label={tr("cpu")} value={hardware.cpuThreads ? `${hardware.cpuThreads}` : "—"} />
-              <Metric
-                label={tr("ram")}
-                value={hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : "—"}
-              />
-              <Metric label={tr("gpu")} value={tr("gpuCpu")} />
-              <Metric label={tr("vram")} value="—" />
-            </div>
-            <p className="muted" style={{ marginTop: 10 }}>
-              {tr("contextHint")}
-            </p>
-          </div>
-          {studio.advancedOpen ? (
-            <ul className="log-list">
-              {studio.logs.slice(-12).map((line, index) => (
-                <li key={`${line}-${index}`}>{line}</li>
-              ))}
-            </ul>
-          ) : (
-            <Button variant="ghost" onClick={() => studio.setAdvancedOpen(true)}>
-              {tr("advancedLogs")}
-            </Button>
-          )}
-        </aside>
-      ) : null}
 
       <CommandPalette
         open={studio.commandOpen}

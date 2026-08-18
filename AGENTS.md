@@ -64,7 +64,14 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
 - `save_script(items)` → `{ items[] }`
   - `items` in: `{ videoPath, path, segments }`
   - Aggiorna `.asr.json` / `.trl.json` e rigenera la cartella di export
-- `engine_status()` → `{ ffmpegOk, ffmpegPath, pythonOk, pythonPath, whisperOk, translateOk }`
+- `engine_status(quality?)` → `{ ffmpegOk, ffmpegPath, pythonOk, pythonPath, whisperOk, translateOk, whisperReady, translateReady, modelsReady, whisperModel }`
+  - `whisperOk` / `translateOk`: pacchetti Python
+  - `whisperReady` / `translateReady` / `modelsReady`: file modello in cache HuggingFace
+- `prepare_models(quality, parts?)` → `{ whisperReady, translateReady, modelsReady, whisperModel }`
+  - `parts`: `all` | `whisper` | `translate` (default `all`)
+  - Evento `prepare-progress`: `status`, `part`, `message`, `percent`
+  - Worker: `worker/prepare.py` — scarica Whisper (qualità scelta) e NLLB prima del lavoro
+  - All’avvio l’app avvia il download se manca qualcosa. Avvia elaborazione solo a modelli pronti
 - `export_output(items)` → `{ items[] }`
   - `items` in: `{ videoPath, trlPath }`
   - `items` out: `{ videoPath, folderPath, srtPath, jsonPath, language, error }`
@@ -110,7 +117,7 @@ npm install
 npm run tauri dev
 ```
 
-Worker Python (nella cartella `worker`, non eseguito dall’agente). Prima esecuzione scarica il modello Whisper:
+Worker Python (nella cartella `worker`, non eseguito dall’agente):
 
 ```
 cd worker
@@ -118,7 +125,7 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 ```
 
-Prima traduzione (lingue diverse) scarica il modello NLLB (~1 GB, una tantum).
+All’avvio l’app scarica da sola Whisper (qualità scelta) e NLLB, con progresso in interfaccia. Si può anche fare da Impostazioni. I modelli non si scaricano più durante un lavoro.
 
 macOS:
 

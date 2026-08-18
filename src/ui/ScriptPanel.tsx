@@ -64,7 +64,7 @@ export function ScriptPanel({ script, loading, editable, saving, tr, onSave }: P
       ) : null}
       <ul className="script-list">
         {draft.map((segment, index) => (
-          <li key={`${segment.start}-${index}`}>
+          <li key={`${segment.start}-${index}`} className={view === "both" ? "is-pair" : undefined}>
             <time>
               {formatMediaDuration(segment.start)} – {formatMediaDuration(segment.end)}
             </time>

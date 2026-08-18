@@ -12,21 +12,10 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from glossary import apply_to_text, parse_terms
+from models import BEAMS, MODELS
 
 logging.getLogger("faster_whisper").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-
-MODELS = {
-    "fast": "base",
-    "balanced": "small",
-    "max": "large-v3",
-}
-
-BEAMS = {
-    "fast": 1,
-    "balanced": 5,
-    "max": 5,
-}
 
 
 def emit(payload: dict) -> None:
@@ -190,13 +179,22 @@ def main() -> int:
 
     device, compute = pick_device()
     try:
-        model = WhisperModel(model_name, device=device, compute_type=compute)
+        model = WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute,
+            local_files_only=True,
+        )
     except Exception as err:
         print(
             json.dumps(
                 {
                     "ok": False,
-                    "error": f"Impossibile caricare il modello {model_name}: {err}",
+                    "error": (
+                        f"Modello Whisper {model_name} non è in cache. "
+                        "Scaricalo da Impostazioni prima di avviare il lavoro. "
+                        f"({err})"
+                    ),
                     "items": [],
                 }
             )

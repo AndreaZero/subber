@@ -210,6 +210,26 @@ export type EngineStatus = {
   pythonPath: string | null;
   whisperOk: boolean;
   translateOk: boolean;
+  whisperReady: boolean;
+  translateReady: boolean;
+  modelsReady: boolean;
+  whisperModel: string | null;
+};
+
+export type PreparePart = "all" | "whisper" | "translate";
+
+export type PrepareProgress = {
+  status: string;
+  part: string;
+  message: string;
+  percent: number | null;
+};
+
+export type PrepareResult = {
+  whisperReady: boolean;
+  translateReady: boolean;
+  modelsReady: boolean;
+  whisperModel: string | null;
 };
 
 export type SaveScriptItem = {

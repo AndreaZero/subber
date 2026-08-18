@@ -71,8 +71,7 @@
 
   --sidebar: 72px;
   --sidebar-open: 212px;
-  --topbar: 58px;
-  --context: 320px;
+  --topbar: 56px;
 
   --focus: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent);
 }

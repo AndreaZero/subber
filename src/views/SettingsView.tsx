@@ -1,7 +1,9 @@
-import { OUTPUT_LANGUAGES, SPOKEN_LANGUAGES, languageName, type EngineStatus, type QualityPreset } from "../lib/files";
+import { OUTPUT_LANGUAGES, SPOKEN_LANGUAGES, languageName, type EngineStatus, type PreparePart, type QualityPreset } from "../lib/files";
 import type { Msg, UiLang } from "../lib/i18n";
 import { QUALITY_PRESETS, TRANSLATION_MODEL, phaseLabel, qualityHint, qualityLabel, type RunPhase } from "../lib/pipeline";
+import type { PrepareState } from "../lib/useStudio";
 import { Button } from "../ui/Button";
+import { ModelSetup } from "../ui/ModelSetup";
 import { SegmentedControl } from "../ui/SegmentedControl";
 
 type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
@@ -28,6 +30,8 @@ type Props = {
   onToggleAdvanced: () => void;
   onUiLang: (value: UiLang) => void;
   engine: EngineStatus | null;
+  prepare: PrepareState | null;
+  onDownloadModels: (parts?: PreparePart) => void;
 };
 
 export function SettingsView({
@@ -52,6 +56,8 @@ export function SettingsView({
   onToggleAdvanced,
   onUiLang,
   engine,
+  prepare,
+  onDownloadModels,
 }: Props) {
   return (
     <div>
@@ -60,6 +66,16 @@ export function SettingsView({
         <h2>{tr("settingsTitle")}</h2>
         <p>{tr("settingsLead")}</p>
       </div>
+
+      <ModelSetup
+        variant="settings"
+        engine={engine}
+        prepare={prepare}
+        quality={quality}
+        locked={working}
+        tr={tr}
+        onDownload={onDownloadModels}
+      />
 
       <div className="settings-grid">
         <div className="ui-field" style={{ gridColumn: "1 / -1" }}>
@@ -122,33 +138,6 @@ export function SettingsView({
         </label>
       </div>
 
-      {engine ? (
-        <div className="panel" style={{ marginBottom: 22 }}>
-          <p className="kicker">{tr("engineTitle")}</p>
-          <div className="advanced-grid" style={{ marginTop: 10 }}>
-            <div>
-              <b>FFmpeg</b>
-              {engine.ffmpegOk ? tr("engineFfmpegOk") : tr("engineFfmpegMissing")}
-            </div>
-            <div>
-              <b>Python</b>
-              {engine.pythonOk ? tr("enginePythonOk") : tr("enginePythonMissing")}
-            </div>
-            <div>
-              <b>Whisper</b>
-              {engine.whisperOk ? tr("engineWhisperOk") : tr("engineWhisperMissing")}
-            </div>
-            <div>
-              <b>NLLB</b>
-              {engine.translateOk ? tr("engineTranslateOk") : tr("engineTranslateMissing")}
-            </div>
-          </div>
-          <p className="muted" style={{ marginTop: 10 }}>
-            {tr("engineHint")}
-          </p>
-        </div>
-      ) : null}
-
       <div className="advanced">
         <Button variant="ghost" onClick={onToggleAdvanced}>
           {advancedOpen ? tr("hideAdvanced") : tr("advanced")}
@@ -156,6 +145,18 @@ export function SettingsView({
         {advancedOpen ? (
           <div className="panel" style={{ marginTop: 12 }}>
             <div className="advanced-grid">
+              {engine ? (
+                <>
+                  <div>
+                    <b>FFmpeg</b>
+                    {engine.ffmpegOk ? tr("engineFfmpegOk") : tr("engineFfmpegMissing")}
+                  </div>
+                  <div>
+                    <b>Python</b>
+                    {engine.pythonOk ? tr("enginePythonOk") : tr("enginePythonMissing")}
+                  </div>
+                </>
+              ) : null}
               <div>
                 <b>{tr("asrModel")}</b>
                 {asrModel}

@@ -1,6 +1,7 @@
 mod asr;
 mod export;
 mod ffmpeg;
+mod prepare;
 mod python;
 mod translate;
 
@@ -295,12 +296,15 @@ struct EngineStatus {
     python_path: Option<String>,
     whisper_ok: bool,
     translate_ok: bool,
+    whisper_ready: bool,
+    translate_ready: bool,
+    models_ready: bool,
+    whisper_model: Option<String>,
 }
 
-#[tauri::command]
-fn engine_status(app: AppHandle) -> EngineStatus {
+fn collect_engine_status(app: &AppHandle, quality: &str) -> EngineStatus {
     let ffmpeg = ffmpeg::resolve_ffmpeg().ok();
-    let worker = python::resolve_script(&app, "transcribe.py").ok();
+    let worker = python::resolve_script(app, "transcribe.py").ok();
     let py = worker.as_ref().and_then(|path| python::resolve_python(path).ok());
     let python_ok = py.is_some();
     let whisper_ok = py
@@ -311,6 +315,16 @@ fn engine_status(app: AppHandle) -> EngineStatus {
         .as_ref()
         .map(|runtime| python::python_ok(runtime, "import ctranslate2, transformers"))
         .unwrap_or(false);
+    let models = if python_ok {
+        prepare::check_models(app, quality)
+    } else {
+        prepare::PrepareResult {
+            whisper_ready: false,
+            translate_ready: false,
+            models_ready: false,
+            whisper_model: None,
+        }
+    };
     EngineStatus {
         ffmpeg_ok: ffmpeg.is_some(),
         ffmpeg_path: ffmpeg.map(|path| path.display().to_string()),
@@ -318,7 +332,42 @@ fn engine_status(app: AppHandle) -> EngineStatus {
         python_path: py.map(|runtime| runtime.program.display().to_string()),
         whisper_ok,
         translate_ok,
+        whisper_ready: models.whisper_ready,
+        translate_ready: models.translate_ready,
+        models_ready: models.models_ready,
+        whisper_model: models.whisper_model,
     }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn engine_status(app: AppHandle, quality: Option<String>) -> EngineStatus {
+    let quality = quality.unwrap_or_else(|| "balanced".into());
+    tauri::async_runtime::spawn_blocking(move || collect_engine_status(&app, &quality))
+        .await
+        .unwrap_or(EngineStatus {
+            ffmpeg_ok: false,
+            ffmpeg_path: None,
+            python_ok: false,
+            python_path: None,
+            whisper_ok: false,
+            translate_ok: false,
+            whisper_ready: false,
+            translate_ready: false,
+            models_ready: false,
+            whisper_model: None,
+        })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn prepare_models(
+    app: AppHandle,
+    quality: String,
+    parts: Option<String>,
+) -> Result<prepare::PrepareResult, String> {
+    let parts = parts.unwrap_or_else(|| "all".into());
+    tauri::async_runtime::spawn_blocking(move || prepare::prepare_models(&app, &quality, &parts))
+        .await
+        .map_err(|err| format!("Download modelli interrotto: {err}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -340,6 +389,7 @@ pub fn run() {
             preview_videos,
             read_script,
             engine_status,
+            prepare_models,
             extract_audio,
             transcribe_audio,
             export_source,

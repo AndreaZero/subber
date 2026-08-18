@@ -5,20 +5,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from glossary import enforce, parse_terms, protect, restore
+from models import NLLB_LOCAL, NLLB_REPO
 from subtitles import clean_text
 
-NLLB_REPO = os.environ.get(
-    "VIDEO_SUB_NLLB_REPO",
-    "entai2965/nllb-200-distilled-600M-ctranslate2",
-)
-NLLB_LOCAL = os.environ.get("VIDEO_SUB_NLLB", "").strip()
 MAX_BATCH = 8
 MAX_CHARS = 900
 
@@ -221,15 +216,13 @@ class NllbEngine:
             if not model_dir.exists():
                 raise FileNotFoundError(f"VIDEO_SUB_NLLB non valido: {model_dir}")
         else:
-            emit(
-                {
-                    "videoPath": video_path,
-                    "status": "translating",
-                    "message": "Download modello di traduzione (prima volta)",
-                    "percent": 0,
-                }
-            )
-            model_dir = Path(snapshot_download(NLLB_REPO))
+            try:
+                model_dir = Path(snapshot_download(NLLB_REPO, local_files_only=True))
+            except Exception as err:
+                raise RuntimeError(
+                    "Modello di traduzione NLLB non è in cache. "
+                    "Scaricalo da Impostazioni prima di avviare il lavoro."
+                ) from err
 
         device, compute = pick_device()
         try:

@@ -14,6 +14,8 @@ import type {
   TranslateJob,
   VideoPreview,
   EngineStatus,
+  PreparePart,
+  PrepareResult,
   SaveScriptResult,
 } from "./files";
 
@@ -47,8 +49,15 @@ export async function readScript(path: string): Promise<ScriptFile> {
   return invoke<ScriptFile>("read_script", { path });
 }
 
-export async function engineStatus(): Promise<EngineStatus> {
-  return invoke<EngineStatus>("engine_status");
+export async function engineStatus(quality = "balanced"): Promise<EngineStatus> {
+  return invoke<EngineStatus>("engine_status", { quality });
+}
+
+export async function prepareModels(
+  quality: string,
+  parts: PreparePart = "all",
+): Promise<PrepareResult> {
+  return invoke<PrepareResult>("prepare_models", { quality, parts });
 }
 
 export async function saveScript(
