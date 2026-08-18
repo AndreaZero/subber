@@ -74,94 +74,67 @@ def translate_ready() -> bool:
     return repo_ready(NLLB_REPO)
 
 
-class EmitTqdm:
-    """tqdm-compatible: progresso JSON, niente barra nel log."""
+try:
+    from huggingface_hub.utils.tqdm import tqdm as TqdmBase
+except ImportError:
+    try:
+        from tqdm.auto import tqdm as TqdmBase
+    except ImportError:
+        TqdmBase = object  # type: ignore[misc, assignment]
+
+
+class EmitTqdm(TqdmBase):
+    """tqdm reale (serve get_lock a Hugging Face) + progresso JSON."""
 
     def __init__(self, *args, **kwargs) -> None:
-        self.n = kwargs.get("initial") or 0
-        total = kwargs.get("total")
-        self.total = float(total) if total else 0.0
-        self.desc = kwargs.get("desc") or PART_LABEL
-        self._last = -1
-        iterable = args[0] if args else None
-        self._iterable = iterable
-        if iterable is not None and not self.total:
-            try:
-                self.total = float(len(iterable))
-            except TypeError:
-                self.total = 0.0
+        kwargs["disable"] = True
+        kwargs.setdefault("mininterval", 0.4)
+        super().__init__(*args, **kwargs)
+        self._last_pct = -1
+        self._report()
 
-    def __iter__(self):
-        if self._iterable is None:
-            return iter(())
-        for item in self._iterable:
-            self.update(1)
-            yield item
+    def update(self, n=1):
+        result = super().update(n)
+        self._report()
+        return result
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args) -> None:
-        return None
-
-    def update(self, n: float = 1) -> None:
-        self.n = float(self.n) + float(n)
-        inner = (self.n / self.total * 100.0) if self.total > 0 else 0.0
+    def _report(self) -> None:
+        total = float(getattr(self, "total", 0) or 0)
+        current = float(getattr(self, "n", 0) or 0)
+        inner = (current / total * 100.0) if total > 0 else 0.0
         pct = int(inner)
-        if pct == self._last:
+        if pct == getattr(self, "_last_pct", -1):
             return
-        self._last = pct
+        self._last_pct = pct
         lo, hi = PART_WEIGHT
         overall = lo + (hi - lo) * min(1.0, max(0.0, inner / 100.0))
+        desc = getattr(self, "desc", None) or PART_LABEL
         emit(
             {
                 "status": "downloading",
                 "part": PART,
-                "message": str(self.desc),
+                "message": str(desc).strip() or PART_LABEL,
                 "percent": round(overall, 1),
             }
         )
-
-    def close(self) -> None:
-        return None
-
-    def reset(self, total: Optional[float] = None) -> None:
-        if total is not None:
-            self.total = float(total)
-        self.n = 0
-        self._last = -1
-
-    def refresh(self) -> None:
-        return None
-
-    def set_postfix(self, *args, **kwargs) -> None:
-        return None
-
-    def display(self, **kwargs) -> None:
-        return None
-
-    def clear(self, **kwargs) -> None:
-        return None
-
-    def __getattr__(self, name: str):
-        return lambda *args, **kwargs: None
-
-    def set_description(self, desc: Optional[str] = None, refresh: bool = True) -> None:
-        if desc:
-            self.desc = desc
 
 
 def snapshot(repo: str, **extra):
     from huggingface_hub import snapshot_download
 
     kwargs = dict(extra)
+    use_bar = TqdmBase is not object
     try:
         params = inspect.signature(snapshot_download).parameters
-        if "tqdm_class" in params:
+        if use_bar and "tqdm_class" in params:
             kwargs["tqdm_class"] = EmitTqdm
     except (TypeError, ValueError):
         pass
-    return snapshot_download(repo_id=repo, **kwargs)
+    try:
+        return snapshot_download(repo_id=repo, **kwargs)
+    except (AttributeError, TypeError):
+        kwargs.pop("tqdm_class", None)
+        return snapshot_download(repo_id=repo, **kwargs)
 
 
 def set_part(part: str, label: str, weight: tuple[float, float]) -> None:
