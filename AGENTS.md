@@ -71,7 +71,7 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - `parts`: `all` | `whisper` | `translate` (default `all`)
   - Evento `prepare-progress`: `status`, `part`, `message`, `percent`
   - Worker: `worker/prepare.py` — scarica Whisper (qualità scelta) e NLLB prima del lavoro
-  - All’avvio l’app avvia il download se manca qualcosa. Avvia elaborazione solo a modelli pronti
+  - All’avvio l’app installa Python (uv + venv in app data) e i pacchetti, poi scarica Whisper e NLLB. Loader a schermo intero finché `modelsReady`.
 - `export_output(items)` → `{ items[] }`
   - `items` in: `{ videoPath, trlPath }`
   - `items` out: `{ videoPath, folderPath, srtPath, jsonPath, language, error }`
@@ -117,20 +117,4 @@ npm install
 npm run tauri dev
 ```
 
-Worker Python (nella cartella `worker`, non eseguito dall’agente):
-
-```
-cd worker
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
-```
-
-All’avvio l’app scarica da sola Whisper (qualità scelta) e NLLB, con progresso in interfaccia. Si può anche fare da Impostazioni. I modelli non si scaricano più durante un lavoro.
-
-macOS:
-
-```
-cd worker
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
+All’avvio l’app prepara da sola l’ambiente (Python, pacchetti, modelli Whisper e NLLB) e mostra un loader finché non è pronto. Non serve creare un venv da terminale. I file restano in `{appData}/runtime/`.

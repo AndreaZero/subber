@@ -1,4 +1,5 @@
 mod asr;
+mod bootstrap;
 mod export;
 mod ffmpeg;
 mod prepare;
@@ -305,7 +306,10 @@ struct EngineStatus {
 fn collect_engine_status(app: &AppHandle, quality: &str) -> EngineStatus {
     let ffmpeg = ffmpeg::resolve_ffmpeg().ok();
     let worker = python::resolve_script(app, "transcribe.py").ok();
-    let py = worker.as_ref().and_then(|path| python::resolve_python(path).ok());
+    let py = worker
+        .as_ref()
+        .and_then(|path| python::resolve_python(app, path).ok())
+        .or_else(|| python::managed_python(app));
     let python_ok = py.is_some();
     let whisper_ok = py
         .as_ref()

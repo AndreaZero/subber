@@ -92,6 +92,7 @@ export function useStudio() {
   const [scriptSaving, setScriptSaving] = useState(false);
   const [engine, setEngine] = useState<EngineStatus | null>(null);
   const [prepare, setPrepare] = useState<PrepareState | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   const workingRef = useRef(false);
   const cancelRef = useRef(false);
@@ -100,6 +101,8 @@ export function useStudio() {
   workingRef.current = working;
 
   const locked = adding || working;
+  const appReady =
+    Boolean(engine?.pythonOk && engine?.whisperOk && engine?.modelsReady) && !prepare?.active;
   const terms = useMemo(() => parseTerms(glossary), [glossary]);
   const progress = overallProgress(videos);
   const mode = workspaceMode(videos, working);
@@ -146,6 +149,7 @@ export function useStudio() {
       }
       preparingRef.current = true;
       prepareLock = true;
+      setBootError(null);
       localStorage.removeItem(AUTO_MODELS_KEY);
       setPrepare({
         active: true,
@@ -166,19 +170,19 @@ export function useStudio() {
         setEngine(status);
         if (result.modelsReady || status.modelsReady) {
           toast("success", tr("toastModelsReady"));
+        } else {
+          setBootError(tr("toastModelsFail"));
         }
       } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
         setPrepare({
           active: false,
           part: "engine",
-          message: error instanceof Error ? error.message : String(error),
+          message: detail,
           percent: 0,
         });
-        toast(
-          "error",
-          tr("toastModelsFail"),
-          error instanceof Error ? error.message : String(error),
-        );
+        setBootError(detail);
+        toast("error", tr("toastModelsFail"), detail);
       } finally {
         preparingRef.current = false;
         prepareLock = false;
@@ -191,6 +195,11 @@ export function useStudio() {
     localStorage.setItem(AUTO_MODELS_KEY, "0");
     autoTriedRef.current = true;
   }, []);
+
+  const retrySetup = useCallback(() => {
+    autoTriedRef.current = false;
+    void downloadModels("all");
+  }, [downloadModels]);
 
   const copyText = useCallback(
     async (text: string, title: string) => {
@@ -283,13 +292,7 @@ export function useStudio() {
     if (preparingRef.current || workingRef.current) {
       return;
     }
-    if (!engine.pythonOk || !engine.whisperOk) {
-      return;
-    }
-    if (engine.modelsReady) {
-      return;
-    }
-    if (localStorage.getItem(AUTO_MODELS_KEY) === "0") {
+    if (engine.pythonOk && engine.whisperOk && engine.modelsReady) {
       return;
     }
     if (autoTriedRef.current) {
@@ -1124,8 +1127,11 @@ export function useStudio() {
     scriptSaving,
     engine,
     prepare,
+    bootError,
+    appReady,
     downloadModels,
     deferModels,
+    retrySetup,
     uiLang,
     setUiLang,
     tr,

@@ -95,11 +95,11 @@ pub fn transcribe_batch(
     }
 
     let worker = python::resolve_script(app, "transcribe.py")?;
-    let py = python::resolve_python(&worker)?;
+    let py = python::resolve_python(app, &worker)?;
 
     if !python::python_ok(&py, "import faster_whisper") {
         return Err(
-            "faster-whisper non è installato. Nella cartella worker esegui:\npy -3 -m venv .venv\n.venv\\Scripts\\python.exe -m pip install -r requirements.txt"
+            "Ambiente Python non pronto. Attendi la configurazione iniziale, oppure riprova dal loader di avvio."
                 .into(),
         );
     }

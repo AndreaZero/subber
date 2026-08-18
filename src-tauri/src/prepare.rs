@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read};
+use std::path::Path;
 use std::process::Stdio;
 use tauri::{AppHandle, Emitter};
 
@@ -44,7 +45,7 @@ struct WorkerProgress {
     percent: Option<f32>,
 }
 
-fn emit_progress(app: &AppHandle, payload: PrepareProgress) {
+pub fn emit_progress(app: &AppHandle, payload: PrepareProgress) {
     let _ = app.emit("prepare-progress", payload);
 }
 
@@ -54,9 +55,11 @@ fn run_prepare(
     download: bool,
     parts: &str,
     emit: bool,
+    percent_from: f32,
+    percent_span: f32,
 ) -> Result<PrepareResult, String> {
     let worker = python::resolve_script(app, "prepare.py")?;
-    let py = python::resolve_python(&worker)?;
+    let py = python::resolve_python(app, &worker)?;
 
     let mut cmd = std::process::Command::new(&py.program);
     python::with_no_window(&mut cmd);
@@ -68,6 +71,7 @@ fn run_prepare(
     }
     cmd.env("PYTHONUNBUFFERED", "1")
         .env("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+        .current_dir(worker.parent().unwrap_or(Path::new(".")))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -95,13 +99,14 @@ fn run_prepare(
             continue;
         };
         if emit {
+            let mapped = parsed.percent.map(|value| percent_from + value * percent_span / 100.0);
             emit_progress(
                 app,
                 PrepareProgress {
                     status: parsed.status.unwrap_or_else(|| "downloading".into()),
                     part: parsed.part.unwrap_or_else(|| "engine".into()),
                     message: parsed.message.unwrap_or_default(),
-                    percent: parsed.percent,
+                    percent: mapped,
                 },
             );
         }
@@ -146,7 +151,7 @@ fn run_prepare(
 }
 
 pub fn check_models(app: &AppHandle, quality: &str) -> PrepareResult {
-    run_prepare(app, quality, false, "all", false).unwrap_or(PrepareResult {
+    run_prepare(app, quality, false, "all", false, 0.0, 100.0).unwrap_or(PrepareResult {
         whisper_ready: false,
         translate_ready: false,
         models_ready: false,
@@ -155,5 +160,12 @@ pub fn check_models(app: &AppHandle, quality: &str) -> PrepareResult {
 }
 
 pub fn prepare_models(app: &AppHandle, quality: &str, parts: &str) -> Result<PrepareResult, String> {
-    run_prepare(app, quality, true, parts, true)
+    let runtime_needed = !crate::bootstrap::runtime_ready(app);
+    crate::bootstrap::ensure_runtime(app)?;
+    let (from, span) = if runtime_needed {
+        (50.0, 50.0)
+    } else {
+        (0.0, 100.0)
+    };
+    run_prepare(app, quality, true, parts, true, from, span)
 }

@@ -93,7 +93,7 @@ pub fn translate_batch(
     }
 
     let worker = python::resolve_script(app, "translate.py")?;
-    let py = python::resolve_python(&worker)?;
+    let py = python::resolve_python(app, &worker)?;
 
     let first = PathBuf::from(&jobs[0].json_path);
     let request_path = match first.parent() {

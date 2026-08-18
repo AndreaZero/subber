@@ -133,7 +133,7 @@ fn run_export_worker(
     progress_event: &str,
 ) -> Result<WorkerStdout, String> {
     let worker = python::resolve_script(app, script)?;
-    let py = python::resolve_python(&worker)?;
+    let py = python::resolve_python(app, &worker)?;
 
     fs::write(
         request_path,

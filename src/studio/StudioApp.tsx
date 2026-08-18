@@ -9,6 +9,7 @@ import { saveHistory } from "../lib/history";
 import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel } from "../lib/pipeline";
 import { useStudio } from "../lib/useStudio";
 import { Badge } from "../ui/Badge";
+import { BootGate } from "../ui/BootGate";
 import { Button } from "../ui/Button";
 import { CommandPalette } from "../ui/CommandPalette";
 import { Dialog } from "../ui/Dialog";
@@ -24,7 +25,6 @@ import {
 import { IconButton } from "../ui/IconButton";
 import { JobCard } from "../ui/JobCard";
 import { Metric } from "../ui/Metric";
-import { ModelSetup } from "../ui/ModelSetup";
 import { Progress } from "../ui/Progress";
 import { ScriptPanel } from "../ui/ScriptPanel";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -97,6 +97,23 @@ export default function StudioApp() {
       run: () => studio.requestCancel(),
     },
   ];
+
+  if (!studio.appReady) {
+    return (
+      <>
+        <BootGate
+          prepare={studio.prepare}
+          checking={!studio.prepare?.active && !studio.bootError}
+          error={studio.bootError}
+          uiLang={uiLang}
+          tr={tr}
+          onRetry={studio.retrySetup}
+          onUiLang={studio.setUiLang}
+        />
+        <ToastViewport items={studio.toasts} />
+      </>
+    );
+  }
 
   return (
     <div className={`shell ${studio.sidebarOpen ? "is-wide" : ""}`}>
@@ -259,16 +276,6 @@ export default function StudioApp() {
               <>
                 {studio.mode === "empty" && studio.nav === "home" ? (
                   <div className="empty-home">
-                    <ModelSetup
-                      variant="card"
-                      engine={studio.engine}
-                      prepare={studio.prepare}
-                      quality={studio.quality}
-                      locked={studio.working}
-                      tr={tr}
-                      onDownload={studio.downloadModels}
-                      onDefer={studio.deferModels}
-                    />
                     <DropZone
                       dragging={studio.dragging}
                       disabled={studio.locked}
@@ -291,15 +298,6 @@ export default function StudioApp() {
                   </div>
                 ) : (
                   <>
-                    <ModelSetup
-                      variant="banner"
-                      engine={studio.engine}
-                      prepare={studio.prepare}
-                      quality={studio.quality}
-                      locked={studio.working}
-                      tr={tr}
-                      onDownload={studio.downloadModels}
-                    />
                     <DropZone
                       compact
                       dragging={studio.dragging}

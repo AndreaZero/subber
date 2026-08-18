@@ -143,7 +143,7 @@ const it = {
   errFfmpegTitle: "FFmpeg non è disponibile",
   errFfmpegHint: "Installa FFmpeg, riapri l’app, oppure imposta FFMPEG_PATH su ffmpeg.exe.",
   errAsrTitle: "Il motore di trascrizione non è pronto",
-  errAsrHint: "Crea l’ambiente Python nella cartella worker e installa i requisiti.",
+  errAsrHint: "Attendi la configurazione iniziale, poi riprova.",
   errTrlTitle: "La traduzione non è andata a termine",
   errTrlHint: "Controlla che il modello di traduzione sia installato, poi riprova.",
   errFileTitle: "Un file non si può leggere",
@@ -210,7 +210,7 @@ const it = {
   setupLead: "Trascrizione e traduzione restano su questo computer. Scaricale ora, prima di lavorare sui video.",
   setupReady: "Motore pronto",
   setupReadyHint: "Whisper e NLLB sono in cache. Puoi avviare le interviste.",
-  setupNeedPython: "Manca l’ambiente Python del worker. Crea .venv e installa i requisiti, poi riprova.",
+  setupNeedPython: "L’app installa Python e i motori da sola al primo avvio.",
   setupNeedFfmpeg: "FFmpeg non è stato trovato. Installalo e riapri l’app.",
   setupWhisper: "Trascrizione Whisper",
   setupTranslate: "Traduzione NLLB",
@@ -235,6 +235,11 @@ const it = {
   editDockPick: "Scegli un video qui sopra",
   cmdPrepare: "Scarica i modelli",
   cmdPrepareHint: "Prepara Whisper e NLLB",
+  bootKicker: "Primo avvio",
+  bootTitle: "Configurazione in corso",
+  bootLead: "Video Sub installa Python, i motori e i modelli su questo computer. L’app si apre quando è tutto pronto.",
+  bootChecking: "Controllo ambiente…",
+  bootRetry: "Riprova",
 } as const;
 
 const en: Record<keyof typeof it, string> = {
@@ -370,7 +375,7 @@ const en: Record<keyof typeof it, string> = {
   errFfmpegTitle: "FFmpeg is missing",
   errFfmpegHint: "Install FFmpeg, reopen the app, or set FFMPEG_PATH to ffmpeg.exe.",
   errAsrTitle: "Transcription engine is not ready",
-  errAsrHint: "Create the Python environment in the worker folder and install requirements.",
+  errAsrHint: "Wait for the first-launch setup, then retry.",
   errTrlTitle: "Translation could not finish",
   errTrlHint: "Check that the translation model is installed, then retry this interview.",
   errFileTitle: "A file could not be read",
@@ -437,7 +442,7 @@ const en: Record<keyof typeof it, string> = {
   setupLead: "Transcription and translation stay on this computer. Download them now, before you work on videos.",
   setupReady: "Engine ready",
   setupReadyHint: "Whisper and NLLB are cached. You can start the interviews.",
-  setupNeedPython: "The worker Python environment is missing. Create .venv, install requirements, then retry.",
+  setupNeedPython: "The app installs Python and the engines by itself on first launch.",
   setupNeedFfmpeg: "FFmpeg was not found. Install it and reopen the app.",
   setupWhisper: "Whisper transcription",
   setupTranslate: "NLLB translation",
@@ -462,6 +467,11 @@ const en: Record<keyof typeof it, string> = {
   editDockPick: "Choose a video above",
   cmdPrepare: "Download models",
   cmdPrepareHint: "Prepare Whisper and NLLB",
+  bootKicker: "First launch",
+  bootTitle: "Setting up",
+  bootLead: "Video Sub installs Python, the engines, and the models on this computer. The app opens when everything is ready.",
+  bootChecking: "Checking environment…",
+  bootRetry: "Retry",
 };
 
 const COPY = { it, en };
