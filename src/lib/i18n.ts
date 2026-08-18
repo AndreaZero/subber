@@ -632,7 +632,7 @@ export function t(lang: UiLang, key: Msg, vars?: Record<string, string | number>
   let text: string = COPY[lang][key] ?? COPY.it[key];
   if (vars) {
     for (const [name, value] of Object.entries(vars)) {
-      text = text.replaceAll(`{${name}}`, String(value));
+      text = text.split(`{${name}}`).join(String(value));
     }
   }
   return text;
