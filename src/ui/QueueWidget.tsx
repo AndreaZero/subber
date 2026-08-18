@@ -108,7 +108,7 @@ function QueueRow({
             frame
               ? undefined
               : {
-                  background: `linear-gradient(145deg, hsl(${hue} 28% 22%), hsl(${(hue + 40) % 360} 36% 10%))`,
+                  background: `linear-gradient(145deg, hsl(${235 + (hue % 28)} 22% 28%), hsl(${248 + (hue % 16)} 30% 16%))`,
                 }
           }
         >

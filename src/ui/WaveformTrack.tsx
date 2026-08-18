@@ -26,6 +26,23 @@ type Props = {
   onSeek?: (time: number) => void;
 };
 
+function cssColor(node: HTMLElement, name: string, fallback: string): string {
+  const value = getComputedStyle(node).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const raw = hex.replace("#", "").trim();
+  const full = raw.length === 3 ? raw.split("").map((ch) => ch + ch).join("") : raw;
+  if (full.length < 6) {
+    return `rgba(103, 101, 204, ${alpha})`;
+  }
+  const r = Number.parseInt(full.slice(0, 2), 16);
+  const g = Number.parseInt(full.slice(2, 4), 16);
+  const b = Number.parseInt(full.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function barsFromSeed(seed: string, count: number): number[] {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -130,14 +147,16 @@ export const WaveformTrack = forwardRef<WaveformTrackHandle, Props>(function Wav
       const total = durationRef.current;
       const progress = total > 0 ? Math.min(1, Math.max(0, timeRef.current / total)) : 0;
 
-      ctx.fillStyle = "rgba(232, 196, 122, 0.08)";
+      const accent = cssColor(box, "--accent", "#6765cc");
+      const playhead = cssColor(box, "--text-0", "#e5e3e3");
+      ctx.fillStyle = hexToRgba(accent, 0.08);
       ctx.fillRect(0, 0, width * progress, height);
 
       for (let i = 0; i < count; i += 1) {
         const x = i * (barW + gap);
         const h = Math.max(2, bars[i] * (height - 8));
         const played = i / count <= progress;
-        ctx.fillStyle = played ? "rgba(232, 196, 122, 0.92)" : "rgba(232, 196, 122, 0.32)";
+        ctx.fillStyle = played ? hexToRgba(accent, 0.95) : hexToRgba(accent, 0.32);
         ctx.beginPath();
         if (typeof ctx.roundRect === "function") {
           ctx.roundRect(x, mid - h / 2, barW, h, 1);
@@ -148,7 +167,7 @@ export const WaveformTrack = forwardRef<WaveformTrackHandle, Props>(function Wav
       }
 
       if (total > 0) {
-        ctx.fillStyle = "#f5f2eb";
+        ctx.fillStyle = playhead;
         ctx.fillRect(Math.round(width * progress), 0, 1, height);
       }
     }

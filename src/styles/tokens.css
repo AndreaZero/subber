@@ -1,38 +1,43 @@
 :root {
-  --bg-0: #070709;
-  --bg-1: #0b0b0f;
-  --bg-2: #101016;
-  --bg-3: #16161e;
-  --bg-4: #1d1d27;
-  --bg-5: #252532;
+  --bg-0: #0c0e13;
+  --bg-1: #10141b;
+  --bg-2: #161b24;
+  --bg-3: #1b2130;
+  --bg-4: #22293a;
+  --bg-5: #2a3246;
+  --video-bg: #080a0e;
 
-  --line: rgba(255, 255, 255, 0.055);
-  --line-2: rgba(255, 255, 255, 0.09);
-  --line-3: rgba(255, 255, 255, 0.16);
-  --line-accent: rgba(232, 196, 122, 0.45);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --line-3: rgba(255, 255, 255, 0.22);
+  --line-accent: rgba(103, 101, 204, 0.45);
 
-  --text-0: #f5f2eb;
-  --text-1: #c6c0b6;
-  --text-2: #8f8a80;
-  --text-3: #5c5852;
+  --text-0: #f3f2f4;
+  --text-1: #c5cad4;
+  --text-2: #8b93a3;
+  --text-3: #66707f;
 
-  --accent: #e8c47a;
-  --accent-2: #7ed0bc;
-  --accent-soft: rgba(232, 196, 122, 0.12);
-  --accent-glow: rgba(232, 196, 122, 0.28);
-  --mint-soft: rgba(126, 208, 188, 0.14);
+  --accent: #6765cc;
+  --accent-dark: #4638a3;
+  --accent-2: #8a88dc;
+  --accent-soft: rgba(103, 101, 204, 0.16);
+  --accent-glow: rgba(103, 101, 204, 0.22);
+  --mint-soft: rgba(103, 101, 204, 0.1);
 
-  --ok: #8fd4a8;
-  --ok-soft: rgba(143, 212, 168, 0.14);
-  --warn: #e8c47a;
-  --warn-soft: rgba(232, 196, 122, 0.14);
-  --err: #f0a399;
-  --err-soft: rgba(240, 163, 153, 0.14);
+  --ok: #7ec9a4;
+  --ok-soft: rgba(126, 201, 164, 0.14);
+  --ok-line: rgba(126, 201, 164, 0.28);
+  --warn: #c4a574;
+  --warn-soft: rgba(196, 165, 116, 0.14);
+  --warn-line: rgba(196, 165, 116, 0.28);
+  --err: #e39a92;
+  --err-soft: rgba(227, 154, 146, 0.14);
+  --err-line: rgba(227, 154, 146, 0.28);
 
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-xl: 22px;
+  --radius-xl: 20px;
   --radius-full: 999px;
 
   --space-1: 4px;
@@ -54,10 +59,22 @@
   --queue-h: 248px;
   --queue-item: 48px;
 
-  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 10px 30px rgba(0, 0, 0, 0.28);
-  --shadow-2: 0 24px 60px rgba(0, 0, 0, 0.42);
-  --shadow-glow: 0 0 0 1px var(--line-accent), 0 0 28px var(--accent-glow);
+  --glass: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.04) 36%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  --glass-tint: rgba(16, 20, 28, 0.48);
+  --glass-fill: rgba(255, 255, 255, 0.12);
+  --glass-fill-hover: rgba(255, 255, 255, 0.18);
+  --glass-blur: blur(28px) saturate(165%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --field-bg: rgba(6, 8, 12, 0.5);
+
+  --shadow-1: var(--glass-edge), 0 12px 36px rgba(0, 0, 0, 0.38);
+  --shadow-2: var(--glass-edge), 0 24px 64px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 
   --font: "Segoe UI Variable Display", "Segoe UI", "SF Pro Display",
     "Helvetica Neue", system-ui, sans-serif;
@@ -81,7 +98,7 @@
   --sidebar-open: 228px;
   --topbar: 56px;
 
-  --focus: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent);
+  --focus: 0 0 0 3px rgba(103, 101, 204, 0.36);
 }
 
 @media (prefers-reduced-motion: reduce) {

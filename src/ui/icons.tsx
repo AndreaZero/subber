@@ -210,3 +210,20 @@ export function IconSkipFwd() {
     </Svg>
   );
 }
+
+export function IconChevron() {
+  return (
+    <Svg>
+      <path d="m7 10 5 5 5-5" />
+    </Svg>
+  );
+}
+
+export function IconProjects() {
+  return (
+    <Svg>
+      <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4H13l1.8 1.8" />
+      <path d="M4 9.5A1.5 1.5 0 0 1 5.5 8H9l2 2h7.5A1.5 1.5 0 0 1 20 11.5v6A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+    </Svg>
+  );
+}

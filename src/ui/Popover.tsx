@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export type MenuPoint = { x: number; y: number };
 
@@ -8,6 +9,9 @@ type Props = {
   children: ReactNode;
   x?: number;
   y?: number;
+  className?: string;
+  exclude?: { current: Node | null };
+  anchor?: { current: HTMLElement | null };
 };
 
 export function menuPointFromEvent(event: { clientX: number; clientY: number }): MenuPoint {
@@ -31,18 +35,28 @@ export function useMenuPoint() {
   return { point, onContextMenu, openAt, close };
 }
 
-export function Popover({ open, onClose, children, x, y }: Props) {
+function startBox(anchor?: { current: HTMLElement | null }, x?: number, y?: number) {
+  const trigger = anchor?.current;
+  if (trigger) {
+    const hit = trigger.getBoundingClientRect();
+    return { left: hit.left, top: hit.bottom + 6, minWidth: Math.max(168, hit.width) };
+  }
+  return { left: x ?? 0, top: y ?? 0, minWidth: undefined as number | undefined };
+}
+
+export function Popover({ open, onClose, children, x, y, className = "", exclude, anchor }: Props) {
   const ref = useRef<HTMLDivElement>(null);
-  const fixed = x != null && y != null;
 
   useEffect(() => {
     if (!open) {
       return;
     }
     function onPointer(event: globalThis.MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
+      const target = event.target as Node;
+      if (ref.current?.contains(target) || exclude?.current?.contains(target) || anchor?.current?.contains(target)) {
+        return;
       }
+      onClose();
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -55,39 +69,77 @@ export function Popover({ open, onClose, children, x, y }: Props) {
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open, onClose, exclude, anchor]);
 
   useLayoutEffect(() => {
-    if (!open || !fixed || !ref.current) {
+    if (!open) {
       return;
     }
-    const el = ref.current;
-    const box = el.getBoundingClientRect();
     const pad = 8;
-    let left = x;
-    let top = y;
-    if (left + box.width > window.innerWidth - pad) {
-      left = window.innerWidth - box.width - pad;
+
+    function place() {
+      const node = ref.current;
+      if (!node) {
+        return;
+      }
+      const trigger = anchor?.current;
+      let left = x ?? 0;
+      let top = y ?? 0;
+      if (trigger) {
+        const hit = trigger.getBoundingClientRect();
+        left = hit.left;
+        top = hit.bottom + 6;
+        node.style.minWidth = `${Math.max(168, Math.round(hit.width))}px`;
+      }
+      const width = node.offsetWidth;
+      const height = node.offsetHeight;
+      if (left + width > window.innerWidth - pad) {
+        left = trigger
+          ? Math.max(pad, trigger.getBoundingClientRect().right - width)
+          : Math.max(pad, window.innerWidth - width - pad);
+      }
+      if (top + height > window.innerHeight - pad) {
+        top = Math.max(pad, hitTop(trigger, height, pad));
+      }
+      node.style.left = `${Math.max(pad, left)}px`;
+      node.style.top = `${Math.max(pad, top)}px`;
     }
-    if (top + box.height > window.innerHeight - pad) {
-      top = window.innerHeight - box.height - pad;
-    }
-    el.style.left = `${Math.max(pad, left)}px`;
-    el.style.top = `${Math.max(pad, top)}px`;
-  }, [open, fixed, x, y, children]);
+
+    place();
+    const frame = requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, x, y, children, anchor]);
 
   if (!open) {
     return null;
   }
 
-  return (
+  const box = startBox(anchor, x, y);
+  const node = (
     <div
       ref={ref}
-      className={`ui-popover ${fixed ? "is-fixed" : ""}`}
+      className={`ui-popover is-fixed ${className}`.trim()}
       role="menu"
-      style={fixed ? { left: x, top: y } : undefined}
+      style={{ left: box.left, top: box.top, minWidth: box.minWidth }}
     >
       {children}
     </div>
   );
+
+  return createPortal(node, document.body);
+}
+
+function hitTop(trigger: HTMLElement | null | undefined, menuHeight: number, pad: number): number {
+  if (!trigger) {
+    return window.innerHeight - menuHeight - pad;
+  }
+  const hit = trigger.getBoundingClientRect();
+  const above = hit.top - menuHeight - 6;
+  return above >= pad ? above : window.innerHeight - menuHeight - pad;
 }

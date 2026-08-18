@@ -5,6 +5,7 @@ import type { PrepareState } from "../lib/useStudio";
 import { Button } from "../ui/Button";
 import { ModelSetup } from "../ui/ModelSetup";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { Select } from "../ui/Select";
 
 type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
 
@@ -13,6 +14,7 @@ type Props = {
   outputLang: string;
   quality: QualityPreset;
   outputDir: string;
+  projectName?: string;
   locked: boolean;
   working: boolean;
   advancedOpen: boolean;
@@ -26,6 +28,7 @@ type Props = {
   onOutput: (value: string) => void;
   onQuality: (value: QualityPreset) => void;
   onOutputDir: (value: string) => void;
+  onProjectName?: (value: string) => void;
   onPickOutput: () => void;
   onToggleAdvanced: () => void;
   onUiLang: (value: UiLang) => void;
@@ -40,6 +43,7 @@ export function SettingsView({
   outputLang,
   quality,
   outputDir,
+  projectName,
   locked,
   working,
   advancedOpen,
@@ -53,6 +57,7 @@ export function SettingsView({
   onOutput,
   onQuality,
   onOutputDir,
+  onProjectName,
   onPickOutput,
   onToggleAdvanced,
   onUiLang,
@@ -94,23 +99,29 @@ export function SettingsView({
         </div>
         <label className="ui-field">
           <span>{tr("spokenLanguage")}</span>
-          <select value={spokenLang} disabled={working} onChange={(event) => onSpoken(event.target.value)}>
-            {SPOKEN_LANGUAGES.map((lang) => (
-              <option key={lang.id} value={lang.id}>
-                {languageName(lang.id, uiLang)}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={spokenLang}
+            disabled={working}
+            label={tr("spokenLanguage")}
+            options={SPOKEN_LANGUAGES.map((lang) => ({
+              id: lang.id,
+              label: languageName(lang.id, uiLang),
+            }))}
+            onChange={onSpoken}
+          />
         </label>
         <label className="ui-field">
           <span>{tr("subtitleLanguage")}</span>
-          <select value={outputLang} disabled={working} onChange={(event) => onOutput(event.target.value)}>
-            {OUTPUT_LANGUAGES.map((lang) => (
-              <option key={lang.id} value={lang.id}>
-                {languageName(lang.id, uiLang)}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={outputLang}
+            disabled={working}
+            label={tr("subtitleLanguage")}
+            options={OUTPUT_LANGUAGES.map((lang) => ({
+              id: lang.id,
+              label: languageName(lang.id, uiLang),
+            }))}
+            onChange={onOutput}
+          />
         </label>
         <div className="ui-field" style={{ gridColumn: "1 / -1" }}>
           <span>{tr("aiMode")}</span>
@@ -126,12 +137,20 @@ export function SettingsView({
           <p className="muted">{qualityHint(quality, uiLang)}</p>
         </div>
         <label className="ui-field" style={{ gridColumn: "1 / -1" }}>
-          <span>{tr("outputFolder")}</span>
+          <span>{tr("settingsProjectName")}</span>
+          <input
+            value={projectName ?? ""}
+            disabled={working || !onProjectName}
+            onChange={(event) => onProjectName?.(event.target.value)}
+          />
+        </label>
+        <label className="ui-field" style={{ gridColumn: "1 / -1" }}>
+          <span>{tr("settingsProjectFolder")}</span>
           <span className="glossary-add">
             <input
               value={outputDir}
               disabled={working}
-              placeholder={tr("outputPlaceholder")}
+              placeholder={tr("projectsFolderPlaceholder")}
               onChange={(event) => onOutputDir(event.target.value)}
             />
             <Button disabled={locked} onClick={onPickOutput}>

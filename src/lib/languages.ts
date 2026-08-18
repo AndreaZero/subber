@@ -7,7 +7,7 @@ export const DEFAULT_OUTPUT_LANG = "it";
 
 /** Lingue Whisper. Default UI: rilevamento automatico. */
 export const SPOKEN_LANGUAGES: { id: LangCode; label: string }[] = [
-  { id: "auto", label: "Rileva automaticamente" },
+  { id: "auto", label: "Auto" },
   { id: "it", label: "Italiano" },
   { id: "fr", label: "Francese" },
   { id: "en", label: "Inglese" },
@@ -117,7 +117,7 @@ export const OUTPUT_LANGUAGES: { id: LangCode; label: string }[] = SPOKEN_LANGUA
 export function languageName(code: string, lang: UiLang): string {
   const id = (code || "").trim().toLowerCase();
   if (!id || id === "auto" || id === "und") {
-    return lang === "it" ? "Rileva automaticamente" : "Detect automatically";
+    return lang === "it" ? "Auto" : "Auto";
   }
   try {
     const name = new Intl.DisplayNames([lang], { type: "language" }).of(id.split("-")[0]);

@@ -88,6 +88,11 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Importa SRT (e video se c’è) nel Media Pool di DaVinci Resolve via scripting. Se Resolve non è aperto o non c’è un progetto, apre la cartella dell’SRT
 - `read_script(path)` → `{ sourceLanguage, targetLanguage, segments[] }`
   - Legge `.asr.json`, `.trl.json` o `{stem}.json` per mostrare testo e traduzione in app
+- `read_project(folder)` → `ProjectFile | null`
+  - Legge `{folder}/video-sub.json`. `null` se il file non c’è. Errore se la cartella manca.
+- `write_project(folder, project)` → `()`
+  - Scrive `{folder}/video-sub.json` (crea la cartella se manca)
+  - `ProjectFile`: `version`, `id`, `name`, `folder`, `createdAt`, `openedAt`, `spokenLang`, `outputLang`, `quality`, `videos[]` (path e artefatti della coda)
 
 Se lingua parlata = lingua sottotitoli (e non `auto`), la traduzione NLLB non parte e non si scarica. L’SRT sorgente vale anche per DaVinci.
 

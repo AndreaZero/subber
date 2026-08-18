@@ -4,6 +4,7 @@ mod export;
 mod ffmpeg;
 mod open;
 mod prepare;
+mod project;
 mod python;
 mod translate;
 
@@ -420,6 +421,8 @@ pub fn run() {
             open_path,
             import_davinci,
             read_script,
+            project::read_project,
+            project::write_project,
             engine_status,
             prepare_models,
             extract_audio,

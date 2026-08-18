@@ -1,5 +1,20 @@
 # Progress
 
+## Progetti (2026-08-18)
+
+Dopo il boot, l’app apre una pagina progetti: recenti, crea (nome + cartella), apri cartella.
+
+La cartella del progetto è l’`outputDir` della pipeline. Lo stato (lingue, qualità, coda video) sta in `{folder}/video-sub.json`. I recenti stanno in localStorage.
+
+### Check in the running app
+
+Ricarica `npm run tauri dev`:
+
+1. Dopo i modelli, compare la schermata Progetti, non lo studio.
+2. Crea un progetto (nome + cartella) e verifica che si apra lo studio.
+3. Aggiungi un video, torna a Progetti, riapri: la coda c’è ancora.
+4. “Cambia progetto” in sidebar torna alla schermata iniziale.
+
 ## Studio UI/UX redesign (2026-08-18)
 
 Studio Home is two columns: miniplayer + Spotify-style audio on the left, Editor on the right.
@@ -15,13 +30,3 @@ Studio Home is two columns: miniplayer + Spotify-style audio on the left, Editor
 ### Presentation only
 
 Invoke contracts and pipeline workers were not changed. UI pieces: `QueueWidget`, `RunMeter`, `MonitorPanel`, `AudioCover`, `WaveformTrack`, `TranscriptEditor`, `JobsView`.
-
-### Check in the running app
-
-Reload the existing `npm run tauri dev` window:
-
-1. Queue height stays put with 1 or 6+ files (list scrolls).
-2. Run a job — progress appears under Coda, not as a top bar.
-3. Video stays inside a fixed miniplayer box (portrait and landscape).
-4. Audio card is separate: lyrics on cover, waveform underneath.
-5. Editor column shows only the title **Editor**, then the lines.

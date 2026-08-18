@@ -23,8 +23,8 @@ body {
   font-size: var(--fs-body);
   line-height: 1.45;
   background:
-    radial-gradient(1200px 700px at 12% -10%, rgba(232, 196, 122, 0.07), transparent 55%),
-    radial-gradient(900px 500px at 110% 0%, rgba(126, 208, 188, 0.05), transparent 50%),
+    radial-gradient(90% 55% at 50% -18%, rgba(255, 255, 255, 0.07), transparent 58%),
+    radial-gradient(50% 40% at 100% 100%, rgba(70, 56, 163, 0.12), transparent 55%),
     var(--bg-0);
   color: var(--text-0);
   letter-spacing: -0.011em;
@@ -37,11 +37,20 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 button {
-  background: none;
+  background-color: transparent;
   border: 0;
+  box-shadow: none;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+  appearance: auto;
+  -webkit-appearance: auto;
 }
 
 :focus-visible {
@@ -49,8 +58,43 @@ button {
   box-shadow: var(--focus);
 }
 
+button:focus-visible {
+  box-shadow: var(--focus);
+}
+
 ::selection {
-  background: rgba(232, 196, 122, 0.28);
+  background: rgba(103, 101, 204, 0.32);
+  color: var(--text-0);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -32,13 +32,15 @@ import {
   pickVideoFiles,
   prepareModels,
   previewVideos,
+  readProject,
   readScript,
   saveScript,
   transcribeAudio,
   translateSegments,
+  writeProject,
 } from "./native";
 import { loadActiveGlossary, parseTerms, saveActiveGlossary, serializeTerms } from "./glossary";
-import { loadHistory, pushHistory, type HistoryEntry } from "./history";
+import { loadHistory, makeHistoryEntry, pushHistory, type HistoryEntry } from "./history";
 import {
   completedCount,
   failedCount,
@@ -51,6 +53,20 @@ import {
 } from "./pipeline";
 import { createToast, type ToastItem } from "./toasts";
 import { loadUiLang, saveUiLang, t, type Msg, type UiLang } from "./i18n";
+import {
+  buildProjectFile,
+  createProjectFile,
+  folderName,
+  loadRecents,
+  recentFromFile,
+  removeRecent,
+  snapToListed,
+  toStudioProject,
+  upsertRecent,
+  videoToSnap,
+  type ProjectRecent,
+  type StudioProject,
+} from "./projects";
 
 const SIDEBAR_KEY = "video-sub.sidebar.open";
 const AUTO_MODELS_KEY = "video-sub.models.auto";
@@ -72,6 +88,9 @@ export function useStudio() {
   const [quality, setQuality] = useState<QualityPreset>("balanced");
   const [glossary, setGlossary] = useState(loadActiveGlossary);
   const [outputDir, setOutputDir] = useState("");
+  const [project, setProject] = useState<StudioProject | null>(null);
+  const [recents, setRecents] = useState<ProjectRecent[]>(loadRecents);
+  const [projectBusy, setProjectBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [working, setWorking] = useState(false);
   const [phase, setPhase] = useState<RunPhase>(null);
@@ -100,7 +119,17 @@ export function useStudio() {
   const cancelRef = useRef(false);
   const preparingRef = useRef(false);
   const autoTriedRef = useRef(false);
+  const projectRef = useRef<StudioProject | null>(null);
+  const videosRef = useRef(videos);
+  const spokenLangRef = useRef(spokenLang);
+  const outputLangRef = useRef(outputLang);
+  const qualityRef = useRef(quality);
   workingRef.current = working;
+  projectRef.current = project;
+  videosRef.current = videos;
+  spokenLangRef.current = spokenLang;
+  outputLangRef.current = outputLang;
+  qualityRef.current = quality;
 
   const locked = adding || working;
   const needsTranslation = wantsTranslation(spokenLang, outputLang);
@@ -164,6 +193,205 @@ export function useStudio() {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const persistCurrent = useCallback(async () => {
+    const current = projectRef.current;
+    if (!current) {
+      return true;
+    }
+    const file = buildProjectFile(current, {
+      spokenLang: spokenLangRef.current,
+      outputLang: outputLangRef.current,
+      quality: qualityRef.current,
+      videos: videosRef.current,
+    });
+    try {
+      await writeProject(file.folder, file);
+      setRecents(upsertRecent(recentFromFile(file)));
+      return true;
+    } catch (error) {
+      toast(
+        "error",
+        tr("projectSaveFail"),
+        error instanceof Error ? error.message : String(error),
+      );
+      return false;
+    }
+  }, [toast, tr]);
+
+  const enterProject = useCallback(
+    async (file: ReturnType<typeof createProjectFile>, message: Msg) => {
+      const studio = toStudioProject(file);
+      projectRef.current = studio;
+      setProject(studio);
+      setOutputDir(file.folder);
+      setSpokenLang(file.spokenLang);
+      setOutputLang(file.outputLang);
+      setQuality(file.quality);
+      setNav("home");
+      setScript(null);
+      setSelectedPath(null);
+      setRecents(upsertRecent(recentFromFile(file)));
+
+      const snaps = file.videos;
+      if (snaps.length === 0) {
+        setVideos([]);
+        toast("success", tr(message), file.name);
+        return;
+      }
+
+      try {
+        const result = await inspectVideos(snaps.map((item) => item.path));
+        const listed = attachListing(mergeVideos([], result.videos), snaps.map(snapToListed));
+        setVideos(listed);
+        if (listed[0]) {
+          setSelectedPath(listed[0].path);
+        }
+        void applyPreviews(listed.map((video) => video.path));
+        if (result.skipped.length > 0) {
+          toast(
+            "warning",
+            result.skipped.length === 1
+              ? tr("toastSkippedOne")
+              : tr("toastSkippedMany", { n: result.skipped.length }),
+            result.skipped[0]?.reason,
+          );
+        } else {
+          toast("success", tr(message), file.name);
+        }
+      } catch (error) {
+        setVideos(snaps.map(snapToListed));
+        toast(
+          "error",
+          tr("projectOpenFail"),
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    },
+    [applyPreviews, toast, tr],
+  );
+
+  const createProject = useCallback(
+    async (name: string, folder: string) => {
+      setProjectBusy(true);
+      try {
+        const existing = await readProject(folder);
+        if (existing) {
+          await enterProject(existing, "projectOpenedExisting");
+          return;
+        }
+        const file = createProjectFile({
+          name,
+          folder,
+          spokenLang: spokenLangRef.current,
+          outputLang: outputLangRef.current,
+          quality: qualityRef.current,
+        });
+        await writeProject(folder, file);
+        await enterProject(file, "projectCreated");
+      } catch (error) {
+        toast(
+          "error",
+          tr("projectCreateFail"),
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        setProjectBusy(false);
+      }
+    },
+    [enterProject, toast, tr],
+  );
+
+  const openProjectFolder = useCallback(
+    async (folder: string) => {
+      setProjectBusy(true);
+      try {
+        const existing = await readProject(folder);
+        if (existing) {
+          await enterProject(existing, "projectOpened");
+          return;
+        }
+        const file = createProjectFile({
+          name: folderName(folder),
+          folder,
+          spokenLang: spokenLangRef.current,
+          outputLang: outputLangRef.current,
+          quality: qualityRef.current,
+        });
+        await writeProject(folder, file);
+        await enterProject(file, "projectCreated");
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        if (/non trovata/i.test(detail)) {
+          setRecents(removeRecent(folder));
+          toast("error", tr("projectMissing"), detail);
+        } else {
+          toast("error", tr("projectOpenFail"), detail);
+        }
+      } finally {
+        setProjectBusy(false);
+      }
+    },
+    [enterProject, toast, tr],
+  );
+
+  const openRecentProject = useCallback(
+    (folder: string) => {
+      void openProjectFolder(folder);
+    },
+    [openProjectFolder],
+  );
+
+  const pickOpenProject = useCallback(async () => {
+    try {
+      const dir = await pickOutputDir(tr("projectPickFolder"));
+      if (dir) {
+        await openProjectFolder(dir);
+      }
+    } catch (error) {
+      toast("error", tr("toastFolderFail"), error instanceof Error ? error.message : String(error));
+    }
+  }, [openProjectFolder, toast, tr]);
+
+  const pickCreateFolder = useCallback(async () => {
+    try {
+      return await pickOutputDir(tr("projectPickFolder"));
+    } catch (error) {
+      toast("error", tr("toastFolderFail"), error instanceof Error ? error.message : String(error));
+      return null;
+    }
+  }, [toast, tr]);
+
+  const closeProject = useCallback(async () => {
+    if (workingRef.current) {
+      toast("warning", tr("projectBusyWork"));
+      return;
+    }
+    const ok = await persistCurrent();
+    if (!ok) {
+      return;
+    }
+    projectRef.current = null;
+    setProject(null);
+    setOutputDir("");
+    setVideos([]);
+    setSelectedPath(null);
+    setScript(null);
+    setNav("home");
+  }, [persistCurrent, toast, tr]);
+
+  const renameProject = useCallback((name: string) => {
+    setProject((current) => (current ? { ...current, name } : current));
+  }, []);
+
+  const setProjectFolder = useCallback((folder: string) => {
+    setOutputDir(folder);
+    setProject((current) => (current ? { ...current, folder } : current));
+  }, []);
+
+  const forgetRecent = useCallback((folder: string) => {
+    setRecents(removeRecent(folder));
   }, []);
 
   const refreshEngine = useCallback(async () => {
@@ -306,11 +534,13 @@ export function useStudio() {
       if (paths.length === 0 || workingRef.current) {
         return;
       }
+      if (!projectRef.current) {
+        return;
+      }
       setAdding(true);
       try {
         const result = await inspectVideos(paths);
         setVideos((current) => attachListing(mergeVideos(current, result.videos), current));
-        setOutputDir((current) => current || result.videos[0]?.parentDir || "");
         setNav("home");
         if (result.videos[0]) {
           setSelectedPath(result.videos[0].path);
@@ -344,6 +574,31 @@ export function useStudio() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "1" : "0");
   }, [sidebarOpen]);
+
+  const persistKey = useMemo(() => {
+    if (!project) {
+      return "";
+    }
+    return JSON.stringify({
+      id: project.id,
+      name: project.name,
+      folder: project.folder,
+      spokenLang,
+      outputLang,
+      quality,
+      videos: videos.map(videoToSnap),
+    });
+  }, [project, spokenLang, outputLang, quality, videos]);
+
+  useEffect(() => {
+    if (!persistKey) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void persistCurrent();
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [persistKey, persistCurrent]);
 
   useEffect(() => {
     saveActiveGlossary(glossary);
@@ -777,9 +1032,9 @@ export function useStudio() {
 
   async function onPickOutput() {
     try {
-      const dir = await pickOutputDir();
+      const dir = await pickOutputDir(tr("projectPickFolder"));
       if (dir) {
-        setOutputDir(dir);
+        setProjectFolder(dir);
         toast("info", tr("toastFolderSet"));
       }
     } catch (error) {
@@ -1067,14 +1322,15 @@ export function useStudio() {
         const ok = skipItems.length;
         const snapshot: HistoryEntry[] = skipItems.map((item) => {
           const video = batch.find((entry) => samePath(entry.path, item.videoPath));
-          return {
-            id: `${item.videoPath}-${Date.now()}`,
+          return makeHistoryEntry({
+            path: item.videoPath,
             name: video?.name ?? item.videoPath,
-            at: Date.now(),
             ok: true,
             spoken: item.language ?? undefined,
             output: item.language ?? outputLang,
-          };
+            parentDir: video?.parentDir,
+            project,
+          });
         });
         setHistory((current) => {
           let next = current;
@@ -1183,44 +1439,53 @@ export function useStudio() {
       const snapshot: HistoryEntry[] = [];
       for (const item of skipItems) {
         const video = batch.find((entry) => samePath(entry.path, item.videoPath));
-        snapshot.push({
-          id: `${item.videoPath}-${Date.now()}`,
-          name: video?.name ?? item.videoPath,
-          at: Date.now(),
-          ok: true,
-          spoken: item.language ?? undefined,
-          output: item.language ?? outputLang,
-        });
+        snapshot.push(
+          makeHistoryEntry({
+            path: item.videoPath,
+            name: video?.name ?? item.videoPath,
+            ok: true,
+            spoken: item.language ?? undefined,
+            output: item.language ?? outputLang,
+            parentDir: video?.parentDir,
+            project,
+          }),
+        );
       }
       for (const item of packed.items) {
         const translatedItem = translated.items.find((entry) =>
           samePath(entry.videoPath, item.videoPath),
         );
         const video = batch.find((entry) => samePath(entry.path, item.videoPath));
-        snapshot.push({
-          id: `${item.videoPath}-${Date.now()}`,
-          name: video?.name ?? item.videoPath,
-          at: Date.now(),
-          ok: !item.error,
-          spoken: translatedItem?.sourceLanguage ?? undefined,
-          output: item.language ?? translatedItem?.targetLanguage ?? undefined,
-          detail: item.error ?? undefined,
-        });
+        snapshot.push(
+          makeHistoryEntry({
+            path: item.videoPath,
+            name: video?.name ?? item.videoPath,
+            ok: !item.error,
+            spoken: translatedItem?.sourceLanguage ?? undefined,
+            output: item.language ?? translatedItem?.targetLanguage ?? undefined,
+            detail: item.error ?? undefined,
+            parentDir: video?.parentDir,
+            project,
+          }),
+        );
       }
       for (const item of translated.items) {
         if (!item.error) {
           continue;
         }
         const video = batch.find((entry) => samePath(entry.path, item.videoPath));
-        snapshot.push({
-          id: `${item.videoPath}-${Date.now()}`,
-          name: video?.name ?? item.videoPath,
-          at: Date.now(),
-          ok: false,
-          spoken: item.sourceLanguage ?? undefined,
-          output: item.targetLanguage ?? undefined,
-          detail: item.error ?? undefined,
-        });
+        snapshot.push(
+          makeHistoryEntry({
+            path: item.videoPath,
+            name: video?.name ?? item.videoPath,
+            ok: false,
+            spoken: item.sourceLanguage ?? undefined,
+            output: item.targetLanguage ?? undefined,
+            detail: item.error ?? undefined,
+            parentDir: video?.parentDir,
+            project,
+          }),
+        );
       }
       setHistory((current) => {
         let next = current;
@@ -1300,7 +1565,17 @@ export function useStudio() {
     terms,
     setTerms,
     outputDir,
-    setOutputDir,
+    setOutputDir: setProjectFolder,
+    project,
+    recents,
+    projectBusy,
+    createProject,
+    openRecentProject,
+    pickOpenProject,
+    pickCreateFolder,
+    closeProject,
+    renameProject,
+    forgetRecent,
     adding,
     working,
     phase,

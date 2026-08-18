@@ -15,6 +15,7 @@ import {
   IconHistory,
   IconHome,
   IconJobs,
+  IconProjects,
   IconSettings,
   IconSidebar,
 } from "../ui/icons";
@@ -23,12 +24,14 @@ import { Popover, useMenuPoint } from "../ui/Popover";
 import { QueueWidget } from "../ui/QueueWidget";
 import { RunMeter } from "../ui/RunMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { Select } from "../ui/Select";
 import { StudioFloor } from "../ui/StudioFloor";
 import { ToastViewport } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { GlossaryView } from "../views/GlossaryView";
 import { HistoryView } from "../views/HistoryView";
 import { JobsView } from "../views/JobsView";
+import { ProjectsView } from "../views/ProjectsView";
 import { SettingsView } from "../views/SettingsView";
 import "../styles/tokens.css";
 import "../styles/ui.css";
@@ -90,6 +93,11 @@ export default function StudioApp() {
       hint: tr("cmdPrepareHint"),
       run: () => void studio.downloadModels(studio.needsTranslation ? "all" : "whisper"),
     },
+    {
+      id: "projects",
+      label: tr("projectsSwitch"),
+      run: () => void studio.closeProject(),
+    },
     { id: "settings", label: tr("navSettings"), run: () => studio.setNav("settings") },
     {
       id: "cancel",
@@ -115,6 +123,26 @@ export default function StudioApp() {
     );
   }
 
+  if (!studio.project) {
+    return (
+      <>
+        <ProjectsView
+          recents={studio.recents}
+          busy={studio.projectBusy}
+          uiLang={uiLang}
+          tr={tr}
+          onUiLang={studio.setUiLang}
+          onCreate={(name, folder) => void studio.createProject(name, folder)}
+          onOpenFolder={() => void studio.pickOpenProject()}
+          onOpenRecent={studio.openRecentProject}
+          onRemoveRecent={studio.forgetRecent}
+          onPickCreateFolder={studio.pickCreateFolder}
+        />
+        <ToastViewport items={studio.toasts} />
+      </>
+    );
+  }
+
   return (
     <div className={`shell ${studio.sidebarOpen ? "is-wide" : ""}`}>
       <aside className="sidebar">
@@ -122,9 +150,20 @@ export default function StudioApp() {
           <img className="brand-mark" src="/icon.png" alt="" width={32} height={32} />
           <div>
             <b>Video Sub</b>
-            <span>Sub editor</span>
+            <span>{studio.project.name}</span>
           </div>
         </div>
+        <Tooltip label={tr("projectsSwitch")}>
+          <button
+            type="button"
+            className="project-switch"
+            disabled={studio.working || preparing}
+            onClick={() => void studio.closeProject()}
+          >
+            <IconProjects />
+            <span>{tr("projectsSwitch")}</span>
+          </button>
+        </Tooltip>
         <nav className="sidebar-nav">
           {nav.map((item) => (
             <Tooltip key={item.id} label={item.label}>
@@ -215,38 +254,36 @@ export default function StudioApp() {
               className="topbar-tools"
               onContextMenu={(event) => {
                 const target = event.target as HTMLElement;
-                if (target.closest("select, input, textarea")) {
+                if (target.closest("select, input, textarea, .ui-select")) {
                   return;
                 }
                 toolsMenu.onContextMenu(event);
               }}
             >
               <div className="lang-pair">
-                <select
+                <Select
+                  compact
                   value={studio.spokenLang}
                   disabled={studio.working || preparing}
-                  onChange={(event) => studio.setSpokenLang(event.target.value)}
-                  aria-label={tr("spokenLanguage")}
-                >
-                  {SPOKEN_LANGUAGES.map((lang) => (
-                    <option key={lang.id} value={lang.id}>
-                      {languageName(lang.id, uiLang)}
-                    </option>
-                  ))}
-                </select>
+                  label={tr("spokenLanguage")}
+                  options={SPOKEN_LANGUAGES.map((lang) => ({
+                    id: lang.id,
+                    label: languageName(lang.id, uiLang),
+                  }))}
+                  onChange={studio.setSpokenLang}
+                />
                 <em>{studio.needsTranslation ? "→" : "="}</em>
-                <select
+                <Select
+                  compact
                   value={studio.outputLang}
                   disabled={studio.working || preparing}
-                  onChange={(event) => studio.setOutputLang(event.target.value)}
-                  aria-label={tr("subtitleLanguage")}
-                >
-                  {OUTPUT_LANGUAGES.map((lang) => (
-                    <option key={lang.id} value={lang.id}>
-                      {languageName(lang.id, uiLang)}
-                    </option>
-                  ))}
-                </select>
+                  label={tr("subtitleLanguage")}
+                  options={OUTPUT_LANGUAGES.map((lang) => ({
+                    id: lang.id,
+                    label: languageName(lang.id, uiLang),
+                  }))}
+                  onChange={studio.setOutputLang}
+                />
                 {!studio.needsTranslation ? <span className="lang-same">{tr("sameLangNote")}</span> : null}
               </div>
               <SegmentedControl
@@ -344,10 +381,12 @@ export default function StudioApp() {
             {studio.nav === "history" ? (
               <HistoryView
                 entries={studio.history}
+                currentProjectId={studio.project.id}
                 uiLang={uiLang}
                 tr={tr}
                 onClear={() => studio.setClearHistoryOpen(true)}
                 onCopy={(text, title) => void studio.copyText(text, title)}
+                onOpenFolder={(path) => void studio.openFolder(path)}
               />
             ) : null}
 
@@ -357,6 +396,7 @@ export default function StudioApp() {
                 outputLang={studio.outputLang}
                 quality={studio.quality}
                 outputDir={studio.outputDir}
+                projectName={studio.project.name}
                 locked={studio.locked || preparing}
                 working={studio.working || preparing}
                 advancedOpen={studio.advancedOpen}
@@ -370,6 +410,7 @@ export default function StudioApp() {
                 onOutput={studio.setOutputLang}
                 onQuality={confirmQuality}
                 onOutputDir={studio.setOutputDir}
+                onProjectName={studio.renameProject}
                 onPickOutput={() => void studio.onPickOutput()}
                 onToggleAdvanced={() => studio.setAdvancedOpen((open) => !open)}
                 onUiLang={studio.setUiLang}

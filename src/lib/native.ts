@@ -19,6 +19,7 @@ import type {
   SaveScriptResult,
   OpenResult,
 } from "./files";
+import { parseProjectFile, type ProjectFile } from "./projects";
 
 const VIDEO_FILTER = {
   name: "Video",
@@ -59,6 +60,18 @@ export async function importDavinci(
 
 export async function readScript(path: string): Promise<ScriptFile> {
   return invoke<ScriptFile>("read_script", { path });
+}
+
+export async function readProject(folder: string): Promise<ProjectFile | null> {
+  const raw = await invoke<unknown | null>("read_project", { folder });
+  if (raw == null) {
+    return null;
+  }
+  return parseProjectFile(raw, folder);
+}
+
+export async function writeProject(folder: string, project: ProjectFile): Promise<void> {
+  await invoke("write_project", { folder, project });
 }
 
 export async function engineStatus(quality = "balanced"): Promise<EngineStatus> {
@@ -140,11 +153,11 @@ export async function pickVideoFiles(): Promise<string[]> {
   return asPathList(selected);
 }
 
-export async function pickOutputDir(): Promise<string | null> {
+export async function pickOutputDir(title = "Cartella di output"): Promise<string | null> {
   const selected = await open({
     directory: true,
     multiple: false,
-    title: "Cartella di output",
+    title,
   });
   if (selected === null) {
     return null;
