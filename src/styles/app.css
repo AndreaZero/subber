@@ -38,9 +38,9 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #f0d29a, #c4924a);
-  box-shadow: 0 0 18px var(--accent-glow);
+  border-radius: 8px;
+  object-fit: contain;
+  background: #050508;
 }
 
 .brand b {

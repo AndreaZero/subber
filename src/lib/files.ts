@@ -200,7 +200,7 @@ export function attachListing(
       error: old.error,
       percent: old.percent,
       message: old.message,
-      addedAt: old.addedAt,
+      addedAt: old.addedAt ?? Date.now(),
     };
   });
 }

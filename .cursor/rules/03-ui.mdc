@@ -1,0 +1,15 @@
+---
+description: Keep the premium studio UI. Never restore the old utility layout.
+globs: src/App.tsx,src/main.tsx,src/index.css,src/App.css
+alwaysApply: true
+---
+
+# UI
+
+The desktop UI is the premium studio in `src/studio/StudioApp.tsx`, with `src/ui/`, `src/views/`, `src/styles/`.
+
+`src/main.tsx` must import `StudioApp`, not the old single-file utility screen.
+
+Never restore the old layout: centered `.page` / `.hero` / `.dropzone` / `.video-list` / brown utility form. That screen is retired.
+
+If `src/App.tsx` is touched, it must re-export `StudioApp`.
