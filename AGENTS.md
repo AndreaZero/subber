@@ -81,6 +81,9 @@ Cercato in quest’ordine:
 1. variabile d’ambiente `FFMPEG_PATH`
 2. `ffmpeg.exe` / `ffmpeg` accanto all’eseguibile dell’app (sidecar)
 3. `PATH` di sistema
+4. su macOS, anche se il PATH dell’app è vuoto: `/opt/homebrew/bin/ffmpeg` (Apple Silicon) e `/usr/local/bin/ffmpeg` (Intel / Homebrew classico)
+
+Avviata come `.app` o da Cursor, l’app non eredita il PATH di Homebrew: i path fissi coprono quel caso. Non serve reinstallare FFmpeg se `brew` lo vede già.
 
 Windows (riaprire l’app dopo l’installazione):
 

@@ -68,6 +68,13 @@ fn sidecar_candidates(exe_dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+fn known_ffmpeg_bins() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from("/opt/homebrew/bin/ffmpeg"),
+        PathBuf::from("/usr/local/bin/ffmpeg"),
+    ]
+}
+
 pub fn resolve_ffmpeg() -> Result<PathBuf, String> {
     if let Ok(raw) = std::env::var("FFMPEG_PATH") {
         let path = PathBuf::from(raw.trim());
@@ -97,6 +104,12 @@ pub fn resolve_ffmpeg() -> Result<PathBuf, String> {
     });
     if looks_like_ffmpeg(&on_path) {
         return Ok(on_path);
+    }
+
+    for candidate in known_ffmpeg_bins() {
+        if candidate.is_file() && looks_like_ffmpeg(&candidate) {
+            return Ok(candidate);
+        }
     }
 
     Err(MISSING_FFMPEG.into())
