@@ -13,6 +13,7 @@ export type GlossaryPreset = {
 };
 
 const PRESET_KEY = "video-sub.glossary.presets";
+const ACTIVE_KEY = "video-sub.glossary.active";
 
 export function parseTerms(raw: string): string[] {
   const seen = new Set<string>();
@@ -51,4 +52,20 @@ export function loadPresets(): GlossaryPreset[] {
 
 export function savePresets(presets: GlossaryPreset[]): void {
   localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+}
+
+export function loadActiveGlossary(): string {
+  try {
+    const raw = localStorage.getItem(ACTIVE_KEY);
+    if (raw && raw.trim()) {
+      return raw;
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_TERMS.join("\n");
+}
+
+export function saveActiveGlossary(raw: string): void {
+  localStorage.setItem(ACTIVE_KEY, raw);
 }

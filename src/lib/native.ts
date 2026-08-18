@@ -13,6 +13,8 @@ import type {
   TranslateBatchResult,
   TranslateJob,
   VideoPreview,
+  EngineStatus,
+  SaveScriptResult,
 } from "./files";
 
 const VIDEO_FILTER = {
@@ -43,6 +45,20 @@ export async function previewVideos(videoPaths: string[]): Promise<VideoPreview[
 
 export async function readScript(path: string): Promise<ScriptFile> {
   return invoke<ScriptFile>("read_script", { path });
+}
+
+export async function engineStatus(): Promise<EngineStatus> {
+  return invoke<EngineStatus>("engine_status");
+}
+
+export async function saveScript(
+  videoPath: string,
+  path: string,
+  segments: ScriptFile["segments"],
+): Promise<SaveScriptResult> {
+  return invoke<SaveScriptResult>("save_script", {
+    items: [{ videoPath, path, segments }],
+  });
 }
 
 export async function extractAudio(

@@ -286,6 +286,51 @@ async fn translate_segments(
     .map_err(|err| format!("Traduzione interrotta: {err}"))?
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineStatus {
+    ffmpeg_ok: bool,
+    ffmpeg_path: Option<String>,
+    python_ok: bool,
+    python_path: Option<String>,
+    whisper_ok: bool,
+    translate_ok: bool,
+}
+
+#[tauri::command]
+fn engine_status(app: AppHandle) -> EngineStatus {
+    let ffmpeg = ffmpeg::resolve_ffmpeg().ok();
+    let worker = python::resolve_script(&app, "transcribe.py").ok();
+    let py = worker.as_ref().and_then(|path| python::resolve_python(path).ok());
+    let python_ok = py.is_some();
+    let whisper_ok = py
+        .as_ref()
+        .map(|runtime| python::python_ok(runtime, "import faster_whisper"))
+        .unwrap_or(false);
+    let translate_ok = py
+        .as_ref()
+        .map(|runtime| python::python_ok(runtime, "import ctranslate2, transformers"))
+        .unwrap_or(false);
+    EngineStatus {
+        ffmpeg_ok: ffmpeg.is_some(),
+        ffmpeg_path: ffmpeg.map(|path| path.display().to_string()),
+        python_ok,
+        python_path: py.map(|runtime| runtime.program.display().to_string()),
+        whisper_ok,
+        translate_ok,
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn save_script(
+    app: AppHandle,
+    items: Vec<export::SaveScriptJob>,
+) -> Result<export::SaveScriptResult, String> {
+    tauri::async_runtime::spawn_blocking(move || export::save_script(&app, &items))
+        .await
+        .map_err(|err| format!("Salvataggio interrotto: {err}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -294,11 +339,13 @@ pub fn run() {
             inspect_videos,
             preview_videos,
             read_script,
+            engine_status,
             extract_audio,
             transcribe_audio,
             export_source,
             export_output,
-            translate_segments
+            translate_segments,
+            save_script
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

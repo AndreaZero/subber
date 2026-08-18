@@ -3,22 +3,24 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   attachListing,
-  DEFAULT_GLOSSARY,
   DEFAULT_OUTPUT_LANG,
   DEFAULT_SPOKEN_LANG,
   mergeVideos,
   overallProgress,
   samePath,
+  type EngineStatus,
   type ExportProgress,
   type ExtractProgress,
   type LangCode,
   type ListedVideo,
   type QualityPreset,
   type ScriptFile,
+  type ScriptSegment,
   type TranscribeProgress,
   type TranslateProgress,
 } from "./files";
 import {
+  engineStatus,
   exportOutput,
   exportSource,
   extractAudio,
@@ -27,13 +29,15 @@ import {
   pickVideoFiles,
   previewVideos,
   readScript,
+  saveScript,
   transcribeAudio,
   translateSegments,
 } from "./native";
-import { parseTerms, serializeTerms } from "./glossary";
+import { loadActiveGlossary, parseTerms, saveActiveGlossary, serializeTerms } from "./glossary";
 import { loadHistory, pushHistory, type HistoryEntry } from "./history";
 import {
   completedCount,
+  failedCount,
   processedMediaSecs,
   qualityInfo,
   workspaceMode,
@@ -51,7 +55,7 @@ export function useStudio() {
   const [spokenLang, setSpokenLang] = useState<LangCode>(DEFAULT_SPOKEN_LANG);
   const [outputLang, setOutputLang] = useState<LangCode>(DEFAULT_OUTPUT_LANG);
   const [quality, setQuality] = useState<QualityPreset>("balanced");
-  const [glossary, setGlossary] = useState(DEFAULT_GLOSSARY);
+  const [glossary, setGlossary] = useState(loadActiveGlossary);
   const [outputDir, setOutputDir] = useState("");
   const [adding, setAdding] = useState(false);
   const [working, setWorking] = useState(false);
@@ -72,6 +76,8 @@ export function useStudio() {
   const [uiLang, setUiLangState] = useState<UiLang>(loadUiLang);
   const [script, setScript] = useState<ScriptFile | null>(null);
   const [scriptLoading, setScriptLoading] = useState(false);
+  const [scriptSaving, setScriptSaving] = useState(false);
+  const [engine, setEngine] = useState<EngineStatus | null>(null);
 
   const workingRef = useRef(false);
   const cancelRef = useRef(false);
@@ -177,6 +183,16 @@ export function useStudio() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "1" : "0");
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    saveActiveGlossary(glossary);
+  }, [glossary]);
+
+  useEffect(() => {
+    void engineStatus()
+      .then(setEngine)
+      .catch(() => setEngine(null));
+  }, []);
 
   useEffect(() => {
     if (!scriptPath) {
@@ -593,6 +609,22 @@ export function useStudio() {
       return;
     }
 
+    try {
+      const status = await engineStatus();
+      setEngine(status);
+      if (!status.ffmpegOk) {
+        toast("error", tr("toastEngineFfmpeg"), status.ffmpegPath ?? undefined);
+        return;
+      }
+      if (!status.whisperOk) {
+        toast("error", tr("toastEngineWhisper"));
+        return;
+      }
+    } catch (error) {
+      toast("error", tr("toastStopped"), error instanceof Error ? error.message : String(error));
+      return;
+    }
+
     const paths = batch.map((video) => video.path);
     const folder = outputDir.trim();
     cancelRef.current = false;
@@ -738,6 +770,13 @@ export function useStudio() {
         return;
       }
 
+      const translateReady = await engineStatus();
+      setEngine(translateReady);
+      if (!translateReady.translateOk && spokenLang !== outputLang) {
+        toast("error", tr("toastEngineTranslate"));
+        return;
+      }
+
       setPhase("translate");
       const translated = await translateSegments(translateJobs, outputLang, glossary);
       setVideos((current) =>
@@ -875,6 +914,41 @@ export function useStudio() {
     setGlossary(serializeTerms(next));
   }
 
+  async function saveEdits(segments: ScriptSegment[]) {
+    if (!selected || !scriptPath) {
+      return;
+    }
+    setScriptSaving(true);
+    try {
+      const result = await saveScript(selected.path, scriptPath, segments);
+      const item = result.items[0];
+      if (item?.error) {
+        toast("error", tr("toastSaveFail"), item.error);
+        return;
+      }
+      setVideos((current) =>
+        current.map((video) =>
+          samePath(video.path, selected.path)
+            ? {
+                ...video,
+                folderPath: item?.folderPath ?? video.folderPath,
+                outputSrtPath: item?.srtPath ?? video.outputSrtPath,
+                bundlePath: item?.jsonPath ?? video.bundlePath,
+                srtPath: item?.srtPath ?? video.srtPath,
+              }
+            : video,
+        ),
+      );
+      const fresh = await readScript(item?.jsonPath || scriptPath);
+      setScript(fresh);
+      toast("success", tr("toastSaved"));
+    } catch (error) {
+      toast("error", tr("toastSaveFail"), error instanceof Error ? error.message : String(error));
+    } finally {
+      setScriptSaving(false);
+    }
+  }
+
   return {
     videos,
     setVideos,
@@ -906,6 +980,8 @@ export function useStudio() {
     selected,
     script,
     scriptLoading,
+    scriptSaving,
+    engine,
     uiLang,
     setUiLang,
     tr,
@@ -931,8 +1007,10 @@ export function useStudio() {
     onPickOutput,
     requestCancel,
     runPipeline,
+    saveEdits,
     qualityMeta: qualityInfo(quality),
     doneCount: completedCount(videos),
+    failCount: failedCount(videos),
     processedSecs: processedMediaSecs(videos),
   };
 }

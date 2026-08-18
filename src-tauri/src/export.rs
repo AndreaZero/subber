@@ -290,3 +290,72 @@ pub fn export_output_batch(
 
     Ok(OutputExportBatchResult { items })
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveScriptJob {
+    pub video_path: String,
+    pub path: String,
+    pub segments: serde_json::Value,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveScriptItem {
+    pub video_path: String,
+    pub path: Option<String>,
+    pub folder_path: Option<String>,
+    pub srt_path: Option<String>,
+    pub json_path: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveScriptResult {
+    pub items: Vec<SaveScriptItem>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveWorkerItem {
+    video_path: String,
+    path: Option<String>,
+    folder_path: Option<String>,
+    srt_path: Option<String>,
+    json_path: Option<String>,
+    error: Option<String>,
+}
+
+pub fn save_script(app: &AppHandle, jobs: &[SaveScriptJob]) -> Result<SaveScriptResult, String> {
+    if jobs.is_empty() {
+        return Err("Niente da salvare.".into());
+    }
+
+    let request_path = match PathBuf::from(&jobs[0].path).parent() {
+        Some(dir) => dir.join(".video-sub-save.json"),
+        None => std::env::temp_dir().join(".video-sub-save.json"),
+    };
+    let request = json!({
+        "jobs": jobs.iter().map(|job| json!({
+            "videoPath": job.video_path,
+            "path": job.path,
+            "segments": job.segments,
+        })).collect::<Vec<_>>(),
+    });
+    let parsed = run_export_worker(app, "save_script.py", &request_path, request, "save-script-progress")?;
+    let items = serde_json::from_value::<Vec<SaveWorkerItem>>(parsed.items.unwrap_or(json!([])))
+        .map_err(|err| format!("Risposta salvataggio non valida: {err}"))?
+        .into_iter()
+        .map(|item| SaveScriptItem {
+            video_path: item.video_path,
+            path: item.path,
+            folder_path: item.folder_path,
+            srt_path: item.srt_path,
+            json_path: item.json_path,
+            error: item.error,
+        })
+        .collect();
+
+    Ok(SaveScriptResult { items })
+}

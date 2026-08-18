@@ -203,6 +203,28 @@ export type VideoPreview = {
   durationSecs: number | null;
 };
 
+export type EngineStatus = {
+  ffmpegOk: boolean;
+  ffmpegPath: string | null;
+  pythonOk: boolean;
+  pythonPath: string | null;
+  whisperOk: boolean;
+  translateOk: boolean;
+};
+
+export type SaveScriptItem = {
+  videoPath: string;
+  path: string | null;
+  folderPath: string | null;
+  srtPath: string | null;
+  jsonPath: string | null;
+  error: string | null;
+};
+
+export type SaveScriptResult = {
+  items: SaveScriptItem[];
+};
+
 export const DEFAULT_GLOSSARY = [
   "Caravaggio",
   "Michelangelo Merisi",

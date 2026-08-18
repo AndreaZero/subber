@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from glossary import enforce, parse_terms, protect, restore
 from subtitles import clean_text
 
 NLLB_REPO = os.environ.get(
@@ -149,31 +150,6 @@ def flores_code(lang: str) -> str:
             f"Lingua non supportata dalla traduzione: {lang or 'sconosciuta'}."
         )
     return flores
-
-
-def glossary_terms(glossary: str) -> List[str]:
-    terms = [line.strip() for line in glossary.splitlines() if line.strip()]
-    terms.sort(key=len, reverse=True)
-    return [term for term in terms if len(term) >= 3]
-
-
-def protect(text: str, terms: Sequence[str]) -> Tuple[str, Dict[str, str]]:
-    mapping: Dict[str, str] = {}
-    protected = text
-    for index, term in enumerate(terms):
-        if term not in protected:
-            continue
-        token = f"GLOSS{index:02d}"
-        protected = protected.replace(term, token)
-        mapping[token] = term
-    return protected, mapping
-
-
-def restore(text: str, mapping: Dict[str, str]) -> str:
-    out = text
-    for token, term in mapping.items():
-        out = re.sub(re.escape(token), term, out, flags=re.IGNORECASE)
-    return clean_text(out)
 
 
 def pack_block(prev: str, curr: str, nxt: str) -> str:
@@ -367,7 +343,7 @@ def translate_segments(
     for index, raw in enumerate(translated):
         extracted = extract_current(raw, flags[index])
         if extracted:
-            outputs[index] = restore(extracted, maps[index])
+            outputs[index] = enforce(restore(extracted, maps[index]), terms)
         elif not plains[index]:
             outputs[index] = ""
         else:
@@ -377,13 +353,13 @@ def translate_segments(
     if retry_text:
         retried = engine.translate_many(source_lang, target_lang, retry_text)
         for index, raw in zip(retry_idx, retried):
-            outputs[index] = restore(extract_current(raw, False) or raw, maps[index])
+            outputs[index] = enforce(restore(extract_current(raw, False) or raw, maps[index]), terms)
 
     return outputs
 
 
-def copy_segments(segments: Sequence[dict]) -> List[str]:
-    return [clean_text(str(segment.get("text") or "")) for segment in segments]
+def copy_segments(segments: Sequence[dict], terms: Sequence[str]) -> List[str]:
+    return [enforce(clean_text(str(segment.get("text") or "")), terms) for segment in segments]
 
 
 def translate_one(job: dict, target_lang: str, terms: Sequence[str], engine: Optional[NllbEngine]) -> Tuple[dict, Optional[NllbEngine]]:
@@ -447,7 +423,7 @@ def translate_one(job: dict, target_lang: str, terms: Sequence[str], engine: Opt
             )
 
     if same_lang:
-        texts = copy_segments(segments)
+        texts = copy_segments(segments, terms)
     else:
         flores_code(source_lang)
         flores_code(target_lang)
@@ -515,7 +491,7 @@ def main() -> int:
     request = json.loads(Path(args.batch).read_text(encoding="utf-8"))
     jobs = request.get("jobs") or []
     target_lang = request.get("targetLanguage") or "it"
-    terms = glossary_terms(request.get("glossary") or "")
+    terms = parse_terms(request.get("glossary") or "")
     if not jobs:
         print(json.dumps({"ok": False, "error": "Nessuna trascrizione da tradurre.", "items": []}))
         return 1

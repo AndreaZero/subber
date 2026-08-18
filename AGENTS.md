@@ -25,9 +25,9 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
 5. **Fatto:** traduzione contestuale (default FR→IT, lingua output selezionabile)  
 6. **Fatto:** Formatter SRT nella lingua di output  
 7. **Fatto:** Export `{output}.srt` + `.json` in cartella per video  
-8. Glossario (ASR + traduzione)  
-9. Progress / errori  
-10. Editor interno (solo dopo)
+8. **Fatto:** Glossario (ASR + traduzione)  
+9. **Fatto:** Progress / errori  
+10. **Fatto:** Editor interno
 
 ## Contratti invoke
 
@@ -60,7 +60,11 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Contesto: segmento precedente + corrente + successivo
   - Worker: `worker/translate.py` — NLLB-200 locale, mai Whisper `task=translate`
   - Lingua sorgente dal file `.asr.json` (rilevata o scelta). Se uguale all’output, copia senza tradurre
-  - Il glossario resta invariato (placeholder)
+  - Glossario: placeholder in traduzione (GLOSS00…) e forma canonica ripristinata; in ASR `initial_prompt` + correzione maiuscole/minuscole
+- `save_script(items)` → `{ items[] }`
+  - `items` in: `{ videoPath, path, segments }`
+  - Aggiorna `.asr.json` / `.trl.json` e rigenera la cartella di export
+- `engine_status()` → `{ ffmpegOk, ffmpegPath, pythonOk, pythonPath, whisperOk, translateOk }`
 - `export_output(items)` → `{ items[] }`
   - `items` in: `{ videoPath, trlPath }`
   - `items` out: `{ videoPath, folderPath, srtPath, jsonPath, language, error }`

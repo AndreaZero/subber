@@ -255,6 +255,7 @@ export default function StudioApp() {
                 onPickOutput={() => void studio.onPickOutput()}
                 onToggleAdvanced={() => studio.setAdvancedOpen((open) => !open)}
                 onUiLang={studio.setUiLang}
+                engine={studio.engine}
               />
             ) : null}
 
@@ -299,6 +300,9 @@ export default function StudioApp() {
                           label={tr("metricInterviews")}
                           value={`${studio.doneCount} / ${studio.videos.length}`}
                         />
+                        {studio.failCount > 0 ? (
+                          <Metric label={tr("metricFailed")} value={`${studio.failCount}`} />
+                        ) : null}
                         <div>
                           <Progress value={studio.progress} mint={studio.phase === "translate"} />
                           <div className="stats" style={{ marginTop: 10 }}>
@@ -382,7 +386,14 @@ export default function StudioApp() {
             <p className="muted">{studio.selected.parentDir}</p>
           </div>
           <div className="context-block">
-            <ScriptPanel script={studio.script} loading={studio.scriptLoading} tr={tr} />
+            <ScriptPanel
+              script={studio.script}
+              loading={studio.scriptLoading}
+              editable={!studio.working && Boolean(studio.script)}
+              saving={studio.scriptSaving}
+              tr={tr}
+              onSave={(segments) => void studio.saveEdits(segments)}
+            />
           </div>
           <div className="context-block">
             <div className="hw-strip" style={{ display: "flex" }}>

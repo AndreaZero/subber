@@ -40,6 +40,8 @@
       "../worker/export_output.py",
       "../worker/translate.py",
       "../worker/subtitles.py",
+      "../worker/glossary.py",
+      "../worker/save_script.py",
       "../worker/requirements.txt"
     ]
   }

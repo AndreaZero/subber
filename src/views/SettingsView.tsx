@@ -1,4 +1,4 @@
-import { OUTPUT_LANGUAGES, SPOKEN_LANGUAGES, languageName, type QualityPreset } from "../lib/files";
+import { OUTPUT_LANGUAGES, SPOKEN_LANGUAGES, languageName, type EngineStatus, type QualityPreset } from "../lib/files";
 import type { Msg, UiLang } from "../lib/i18n";
 import { QUALITY_PRESETS, TRANSLATION_MODEL, phaseLabel, qualityHint, qualityLabel, type RunPhase } from "../lib/pipeline";
 import { Button } from "../ui/Button";
@@ -27,6 +27,7 @@ type Props = {
   onPickOutput: () => void;
   onToggleAdvanced: () => void;
   onUiLang: (value: UiLang) => void;
+  engine: EngineStatus | null;
 };
 
 export function SettingsView({
@@ -50,6 +51,7 @@ export function SettingsView({
   onPickOutput,
   onToggleAdvanced,
   onUiLang,
+  engine,
 }: Props) {
   return (
     <div>
@@ -119,6 +121,33 @@ export function SettingsView({
           </span>
         </label>
       </div>
+
+      {engine ? (
+        <div className="panel" style={{ marginBottom: 22 }}>
+          <p className="kicker">{tr("engineTitle")}</p>
+          <div className="advanced-grid" style={{ marginTop: 10 }}>
+            <div>
+              <b>FFmpeg</b>
+              {engine.ffmpegOk ? tr("engineFfmpegOk") : tr("engineFfmpegMissing")}
+            </div>
+            <div>
+              <b>Python</b>
+              {engine.pythonOk ? tr("enginePythonOk") : tr("enginePythonMissing")}
+            </div>
+            <div>
+              <b>Whisper</b>
+              {engine.whisperOk ? tr("engineWhisperOk") : tr("engineWhisperMissing")}
+            </div>
+            <div>
+              <b>NLLB</b>
+              {engine.translateOk ? tr("engineTranslateOk") : tr("engineTranslateMissing")}
+            </div>
+          </div>
+          <p className="muted" style={{ marginTop: 10 }}>
+            {tr("engineHint")}
+          </p>
+        </div>
+      ) : null}
 
       <div className="advanced">
         <Button variant="ghost" onClick={onToggleAdvanced}>

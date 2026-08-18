@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Optional, Tuple
 
+from glossary import apply_to_text, parse_terms
+
 logging.getLogger("faster_whisper").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -51,7 +53,7 @@ def initial_prompt(glossary: str) -> Optional[str]:
     return text[:800]
 
 
-def transcribe_one(model, job: dict, language: str, quality: str, prompt: Optional[str]) -> dict:
+def transcribe_one(model, job: dict, language: str, quality: str, prompt: Optional[str], terms: list[str]) -> dict:
     audio = Path(job["audioPath"])
     output = Path(job["outputJson"])
     video_path = job["videoPath"]
@@ -69,20 +71,27 @@ def transcribe_one(model, job: dict, language: str, quality: str, prompt: Option
     )
 
     lang_arg = None if language in ("auto", "", "detect") else language
-    segments_iter, info = model.transcribe(
-        str(audio),
-        language=lang_arg,
-        task="transcribe",
-        beam_size=BEAMS.get(quality, 5),
-        vad_filter=True,
-        condition_on_previous_text=True,
-        initial_prompt=prompt,
-    )
+    kwargs = {
+        "language": lang_arg,
+        "task": "transcribe",
+        "beam_size": BEAMS.get(quality, 5),
+        "vad_filter": True,
+        "condition_on_previous_text": True,
+        "initial_prompt": prompt,
+    }
+    try:
+        import inspect
+
+        if prompt and "hotwords" in inspect.signature(model.transcribe).parameters:
+            kwargs["hotwords"] = prompt
+    except Exception:
+        pass
+    segments_iter, info = model.transcribe(str(audio), **kwargs)
 
     duration = float(info.duration or 0.0)
     segments = []
     for index, segment in enumerate(segments_iter):
-        text = (segment.text or "").strip()
+        text = apply_to_text((segment.text or "").strip(), terms)
         if not text:
             continue
         avg = float(segment.avg_logprob)
@@ -149,6 +158,7 @@ def main() -> int:
     glossary = request.get("glossary") or ""
     jobs = request.get("jobs") or []
     model_name = MODELS.get(quality, "small")
+    terms = parse_terms(glossary)
     prompt = initial_prompt(glossary)
 
     if not jobs:
@@ -197,7 +207,7 @@ def main() -> int:
     for job in jobs:
         video_path = job.get("videoPath") or ""
         try:
-            items.append(transcribe_one(model, job, language, quality, prompt))
+            items.append(transcribe_one(model, job, language, quality, prompt, terms))
         except Exception as err:
             message = str(err)
             emit(

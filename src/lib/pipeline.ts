@@ -335,8 +335,11 @@ export function friendlyError(raw: string, lang: UiLang): { title: string; hint:
   if (lower.includes("faster-whisper") || lower.includes("venv")) {
     return { title: t(lang, "errAsrTitle"), hint: t(lang, "errAsrHint") };
   }
-  if (lower.includes("nllb") || lower.includes("traduz")) {
+  if (lower.includes("nllb") || lower.includes("traduz") || lower.includes("ctranslate") || lower.includes("transformers")) {
     return { title: t(lang, "errTrlTitle"), hint: t(lang, "errTrlHint") };
+  }
+  if (lower.includes("python")) {
+    return { title: t(lang, "errAsrTitle"), hint: t(lang, "errAsrHint") };
   }
   if (lower.includes("file non trovato") || lower.includes("not found")) {
     return { title: t(lang, "errFileTitle"), hint: t(lang, "errFileHint") };

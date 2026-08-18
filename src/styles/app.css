@@ -656,6 +656,24 @@
   line-height: 1.45;
 }
 
+.script-list textarea {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--text-1);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.script-list textarea + textarea {
+  margin-top: 6px;
+}
+
 .script-list p + p {
   margin-top: 6px;
 }
