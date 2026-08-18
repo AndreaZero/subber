@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { activeCaption, captionText } from "../lib/captions";
 import type { useStudio } from "../lib/useStudio";
 import type { AudioCoverHandle } from "./AudioCover";
 import { CaptionInspector } from "./CaptionInspector";
@@ -34,6 +35,14 @@ export function StudioFloor({ studio, pair }: Props) {
     setClock(time);
   }
 
+  const captionSample = useMemo(() => {
+    if (!studio.script) {
+      return "";
+    }
+    const segment = activeCaption(studio.script.segments, clock);
+    return segment ? captionText(segment) : "";
+  }, [clock, studio.script]);
+
   return (
     <div className={`studio-floor ${studio.working ? "is-busy" : ""} ${studio.productMode === "video" ? "is-video" : ""}`}>
       <MonitorPanel
@@ -56,6 +65,7 @@ export function StudioFloor({ studio, pair }: Props) {
           editable={!studio.working && Boolean(studio.script)}
           saving={studio.scriptSaving}
           currentTime={clock}
+          duration={selected?.durationSecs}
           empty={!selected}
           tr={tr}
           onSave={(segments) => void studio.saveEdits(segments)}
@@ -66,6 +76,7 @@ export function StudioFloor({ studio, pair }: Props) {
           <CaptionInspector
             style={studio.captionStyle}
             locked={studio.working}
+            previewText={captionSample}
             tr={tr}
             onChange={studio.setCaptionStyle}
           />

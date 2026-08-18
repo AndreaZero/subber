@@ -24,21 +24,14 @@ export type CaptionStyle = {
   y: number;
 };
 
-export const CAPTION_FONTS = [
-  "Arial",
-  "Georgia",
-  "Impact",
-  "Courier New",
-  "Trebuchet MS",
-  "Times New Roman",
-] as const;
+export const CAPTION_FONTS = ["Cinematografica", "Bebas Neue"] as const;
 
 export const BURN_FORMATS: BurnFormat[] = ["mp4", "mov", "webm"];
 export const BURN_RESOLUTIONS: BurnResolution[] = ["source", "1080", "1440", "4k"];
 export const BURN_FITS: BurnFit[] = ["source", "landscape", "portrait", "square"];
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
-  fontFamily: "Arial",
+  fontFamily: "Cinematografica",
   fontSize: 48,
   fontWeight: 700,
   color: "#FFFFFF",

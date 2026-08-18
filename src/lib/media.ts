@@ -31,7 +31,14 @@ export function isStockFontPath(path: string): boolean {
   if (lower.includes("/system/library/fonts")) {
     return true;
   }
-  return /^\/library\/fonts\//i.test(normalized);
+  if (/^\/library\/fonts\//i.test(normalized)) {
+    return true;
+  }
+  const file = lower.split("/").pop() || "";
+  return (
+    file.startsWith("bebasneue-") ||
+    file.startsWith("cinematografica-")
+  );
 }
 
 export function applyCaptionFont(family: string, file?: string) {

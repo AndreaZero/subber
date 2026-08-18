@@ -16,6 +16,7 @@ type Props = {
   editable?: boolean;
   saving?: boolean;
   currentTime?: number;
+  duration?: number;
   empty?: boolean;
   tr: Tr;
   onSave?: (segments: ScriptSegment[]) => void;
@@ -33,6 +34,7 @@ export function TranscriptEditor({
   editable,
   saving,
   currentTime,
+  duration,
   empty,
   tr,
   onSave,
@@ -40,7 +42,7 @@ export function TranscriptEditor({
   onCopy,
 }: Props) {
   const waiting = Boolean(working && !script);
-  const vacant = empty || (!loading && !waiting && (!script || script.segments.length === 0));
+  const vacant = empty || (!loading && !waiting && !script);
 
   return (
     <section className="studio-editor">
@@ -74,6 +76,7 @@ export function TranscriptEditor({
           editable={editable}
           saving={saving}
           currentTime={currentTime}
+          duration={duration}
           tr={tr}
           onSave={onSave}
           onSeek={onSeek}

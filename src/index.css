@@ -1,3 +1,4 @@
+@import "./styles/fonts.css";
 @import "./styles/tokens.css";
 
 *,
@@ -21,14 +22,12 @@ html {
 body {
   font-family: var(--font-text);
   font-size: var(--fs-body);
-  line-height: 1.45;
-  background:
-    radial-gradient(90% 55% at 50% -18%, rgba(255, 255, 255, 0.07), transparent 58%),
-    radial-gradient(50% 40% at 100% 100%, rgba(70, 56, 163, 0.12), transparent 55%),
-    var(--bg-0);
+  line-height: 1.4;
+  background: #010101;
   color: var(--text-0);
   letter-spacing: -0.011em;
   overflow: hidden;
+  font-optical-sizing: auto;
 }
 
 button,

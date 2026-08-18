@@ -40,6 +40,7 @@ import {
   extractAudio,
   importDavinci,
   inspectVideos,
+  listFonts,
   openPath,
   pickOutputDir,
   pickVideoFiles,
@@ -93,6 +94,20 @@ function parentDir(path: string): string {
   const trimmed = path.replace(/[\\/]+$/, "");
   const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
   return idx >= 0 ? trimmed.slice(0, idx) : trimmed;
+}
+
+async function resolveFontDir(style: { fontFamily: string; fontFile?: string }): Promise<string | null> {
+  if (style.fontFile) {
+    return parentDir(style.fontFile);
+  }
+  try {
+    const fonts = await listFonts();
+    const family = style.fontFamily.toLowerCase();
+    const match = fonts.find((item) => item.family.toLowerCase() === family && item.path);
+    return match?.path ? parentDir(match.path) : null;
+  } catch {
+    return null;
+  }
 }
 
 export type PrepareState = {
@@ -1687,7 +1702,7 @@ export function useStudio() {
 
     try {
       const style = captionStyleRef.current;
-      const fontDir = style.fontFile ? parentDir(style.fontFile) : null;
+      const fontDir = await resolveFontDir(style);
       const jobs = [];
       for (const video of ready) {
         if (cancelRef.current) {

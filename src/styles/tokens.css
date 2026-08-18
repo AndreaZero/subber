@@ -34,30 +34,30 @@
   --err-soft: rgba(227, 154, 146, 0.14);
   --err-line: rgba(227, 154, 146, 0.28);
 
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 999px;
 
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
+  --space-1: 3px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 16px;
+  --space-8: 24px;
+  --space-10: 28px;
+  --space-12: 32px;
+  --space-16: 40px;
 
-  --card-pad: var(--space-6);
-  --card-radius: var(--radius-lg);
-  --chrome-x: var(--space-6);
-  --thumb-sm: 36px;
-  --mini-h: 200px;
-  --queue-h: 248px;
-  --queue-item: 48px;
+  --card-pad: var(--space-4);
+  --card-radius: var(--radius-md);
+  --chrome-x: var(--space-4);
+  --thumb-sm: 28px;
+  --mini-h: 168px;
+  --queue-h: 200px;
+  --queue-item: 40px;
 
   --glass: linear-gradient(
     165deg,
@@ -76,17 +76,20 @@
   --shadow-2: var(--glass-edge), 0 24px 64px rgba(0, 0, 0, 0.5);
   --shadow-glow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 
-  --font: "Segoe UI Variable Display", "Segoe UI", "SF Pro Display",
-    "Helvetica Neue", system-ui, sans-serif;
-  --font-text: "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", system-ui,
-    sans-serif;
-  --font-mono: "Cascadia Code", "SF Mono", ui-monospace, monospace;
+  --font: "Instrument Sans", "Segoe UI Variable Display", "Segoe UI",
+    "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  --font-text: "Instrument Sans", "Segoe UI Variable Text", "Segoe UI",
+    "SF Pro Text", system-ui, sans-serif;
+  --font-display: "Instrument Sans", "Segoe UI Variable Display", "Segoe UI",
+    system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Code", "SF Mono", ui-monospace,
+    monospace;
 
-  --fs-display: clamp(2.4rem, 3.4vw, 3.4rem);
-  --fs-title: 1.35rem;
-  --fs-body: 0.9375rem;
-  --fs-small: 0.8125rem;
-  --fs-micro: 0.6875rem;
+  --fs-display: clamp(1.55rem, 2.1vw, 1.9rem);
+  --fs-title: 1.05rem;
+  --fs-body: 0.8125rem;
+  --fs-small: 0.75rem;
+  --fs-micro: 0.625rem;
 
   --dur-1: 130ms;
   --dur-2: 220ms;
@@ -94,9 +97,9 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --sidebar: 72px;
-  --sidebar-open: 228px;
-  --topbar: 56px;
+  --sidebar: 56px;
+  --sidebar-open: 188px;
+  --topbar: 44px;
 
   --focus: 0 0 0 3px rgba(103, 101, 204, 0.36);
 }

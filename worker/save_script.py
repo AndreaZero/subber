@@ -33,18 +33,27 @@ def locate(sidecar: Path, data: dict) -> tuple[Path, Path, Path]:
     return work / f"{stem}.asr.json", work / f"{stem}.trl.json", sidecar
 
 
+def as_segment(src: dict, with_translated: bool) -> dict:
+    start = src.get("start")
+    end = src.get("end")
+    item = {
+        "start": float(start) if start is not None else 0.0,
+        "end": float(end) if end is not None else 0.0,
+        "text": src.get("text") or "",
+    }
+    if src.get("speaker") is not None:
+        item["speaker"] = src.get("speaker")
+    if src.get("confidence") is not None:
+        item["confidence"] = src.get("confidence")
+    if with_translated:
+        item["translated"] = src.get("translated") or ""
+    return item
+
+
 def patch_list(raw: list, incoming: list, with_translated: bool) -> list:
-    out = list(raw)
-    for index, src in enumerate(incoming):
-        if index >= len(out):
-            break
-        item = dict(out[index])
-        if src.get("text") is not None:
-            item["text"] = src.get("text") or ""
-        if with_translated and src.get("translated") is not None:
-            item["translated"] = src.get("translated") or ""
-        out[index] = item
-    return out
+    if not incoming:
+        return []
+    return [as_segment(src if isinstance(src, dict) else {}, with_translated) for src in incoming]
 
 
 def write_json(path: Path, data: dict) -> None:

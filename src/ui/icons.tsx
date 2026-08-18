@@ -4,7 +4,7 @@ type Props = SVGProps<SVGSVGElement>;
 
 function Svg({ children, ...rest }: Props & { children: ReactNode }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...rest}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...rest}>
       {children}
     </svg>
   );
@@ -148,6 +148,29 @@ export function IconPlus() {
   );
 }
 
+export function IconTrash() {
+  return (
+    <Svg>
+      <path d="M5 7h14" />
+      <path d="M9 7V5h6v2" />
+      <path d="M8 7l.8 12h6.4L16 7" />
+    </Svg>
+  );
+}
+
+export function IconGrip() {
+  return (
+    <Svg>
+      <circle cx="9" cy="7" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="7" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="17" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="17" r="1.15" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
 export function IconFolder() {
   return (
     <Svg>
@@ -224,6 +247,33 @@ export function IconProjects() {
     <Svg>
       <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4H13l1.8 1.8" />
       <path d="M4 9.5A1.5 1.5 0 0 1 5.5 8H9l2 2h7.5A1.5 1.5 0 0 1 20 11.5v6A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+    </Svg>
+  );
+}
+
+export function IconSnapH() {
+  return (
+    <Svg>
+      <path d="M4 12h16" />
+      <path d="M8 8v8M16 8v8" />
+    </Svg>
+  );
+}
+
+export function IconSnapV() {
+  return (
+    <Svg>
+      <path d="M12 4v16" />
+      <path d="M8 8h8M8 16h8" />
+    </Svg>
+  );
+}
+
+export function IconSnapReset() {
+  return (
+    <Svg>
+      <path d="M5 12a7 7 0 1 0 2-5" />
+      <path d="M5 5v4h4" />
     </Svg>
   );
 }

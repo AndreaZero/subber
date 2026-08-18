@@ -22,14 +22,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-md);
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   cursor: pointer;
-  font-weight: 600;
-  letter-spacing: -0.014em;
+  font-family: var(--font-text);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  font-size: var(--fs-small);
   transition:
     background var(--dur-1) var(--ease),
     border-color var(--dur-1) var(--ease),
@@ -97,9 +99,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
   border: 0;
   background: transparent;
   color: var(--text-1);
@@ -128,10 +130,11 @@
 .ui-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 8px;
+  gap: 5px;
+  height: 18px;
+  padding: 0 6px;
   border-radius: var(--radius-full);
+  font-family: var(--font-text);
   font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -254,22 +257,22 @@
 
 .ui-seg {
   display: inline-flex;
-  padding: 3px;
+  padding: 2px;
   gap: 2px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--glass-fill);
   border: 0;
   box-shadow: var(--glass-edge);
 }
 
 .ui-seg button {
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 9px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
   color: var(--text-2);
   cursor: pointer;
-  font-weight: 600;
-  font-size: 12.5px;
+  font-weight: 500;
+  font-size: 11px;
   transition:
     background var(--dur-1) var(--ease),
     color var(--dur-1) var(--ease),
@@ -377,9 +380,9 @@
 }
 
 .ui-dialog {
-  width: min(420px, calc(100vw - 32px));
-  padding: 22px;
-  border-radius: 18px;
+  width: min(400px, calc(100vw - 28px));
+  padding: 16px;
+  border-radius: 14px;
   background: var(--glass), var(--glass-tint);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -389,8 +392,8 @@
 }
 
 .ui-dialog h3 {
-  margin: 0 0 8px;
-  font-size: 1.1rem;
+  margin: 0 0 6px;
+  font-size: 1rem;
 }
 
 .ui-dialog p {
@@ -419,9 +422,9 @@
 .ui-toast {
   pointer-events: auto;
   display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: var(--glass), var(--glass-tint);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -464,10 +467,10 @@
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 36px;
-  padding: 0 10px 0 12px;
+  height: 28px;
+  padding: 0 8px 0 10px;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--field-bg);
   color: var(--text-0);
   box-shadow: var(--glass-edge);
@@ -506,8 +509,8 @@
 .ui-select.is-compact .ui-select-btn {
   width: auto;
   max-width: 148px;
-  height: 32px;
-  padding: 0 6px 0 8px;
+  height: 26px;
+  padding: 0 5px 0 7px;
   background: transparent;
   box-shadow: none;
 }
@@ -575,8 +578,8 @@
   width: 100%;
   border: 1px solid var(--line);
   background: var(--field-bg);
-  border-radius: 10px;
-  padding: 8px 10px;
+  border-radius: 8px;
+  padding: 6px 8px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition:
     border-color var(--dur-1) var(--ease),
@@ -611,13 +614,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 6px 0 12px;
+  height: 24px;
+  padding: 0 4px 0 10px;
   border-radius: var(--radius-full);
   background: var(--glass-fill);
   border: 1px solid var(--line);
   color: var(--text-0);
-  font-size: 13px;
+  font-size: 12px;
   box-shadow: var(--glass-edge);
   transition:
     border-color var(--dur-1) var(--ease),

@@ -196,13 +196,7 @@ fn read_script(path: String) -> Result<ScriptFile, String> {
     if let Some(list) = data.get("segments").and_then(|v| v.as_array()) {
         for item in list {
             let text = json_text(item.get("text").unwrap_or(&Value::Null));
-            let translated = item
-                .get("translated")
-                .map(json_text)
-                .filter(|s| !s.is_empty());
-            if text.is_empty() && translated.is_none() {
-                continue;
-            }
+            let translated = item.get("translated").map(json_text);
             segments.push(ScriptSegment {
                 start: json_f64(item.get("start").unwrap_or(&Value::Null)),
                 end: json_f64(item.get("end").unwrap_or(&Value::Null)),
@@ -428,8 +422,8 @@ async fn probe_video(video_path: String) -> Result<ffmpeg::VideoSize, String> {
 }
 
 #[tauri::command]
-async fn list_fonts() -> fonts::FontList {
-    tauri::async_runtime::spawn_blocking(fonts::list_fonts)
+async fn list_fonts(app: AppHandle) -> fonts::FontList {
+    tauri::async_runtime::spawn_blocking(move || fonts::list_fonts(&app))
         .await
         .unwrap_or(fonts::FontList { fonts: Vec::new() })
 }
