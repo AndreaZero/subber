@@ -1,0 +1,65 @@
+@import "./styles/tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  color-scheme: dark;
+  background: var(--bg-0);
+}
+
+body {
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(232, 196, 122, 0.07), transparent 55%),
+    radial-gradient(900px 500px at 110% 0%, rgba(126, 208, 188, 0.05), transparent 50%),
+    var(--bg-0);
+  color: var(--text-0);
+  letter-spacing: -0.011em;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+::selection {
+  background: rgba(232, 196, 122, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

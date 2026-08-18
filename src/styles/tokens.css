@@ -1,0 +1,86 @@
+:root {
+  --bg-0: #070709;
+  --bg-1: #0b0b0f;
+  --bg-2: #101016;
+  --bg-3: #16161e;
+  --bg-4: #1d1d27;
+  --bg-5: #252532;
+
+  --line: rgba(255, 255, 255, 0.055);
+  --line-2: rgba(255, 255, 255, 0.09);
+  --line-3: rgba(255, 255, 255, 0.16);
+  --line-accent: rgba(232, 196, 122, 0.45);
+
+  --text-0: #f5f2eb;
+  --text-1: #c6c0b6;
+  --text-2: #8f8a80;
+  --text-3: #5c5852;
+
+  --accent: #e8c47a;
+  --accent-2: #7ed0bc;
+  --accent-soft: rgba(232, 196, 122, 0.12);
+  --accent-glow: rgba(232, 196, 122, 0.28);
+  --mint-soft: rgba(126, 208, 188, 0.14);
+
+  --ok: #8fd4a8;
+  --ok-soft: rgba(143, 212, 168, 0.14);
+  --warn: #e8c47a;
+  --warn-soft: rgba(232, 196, 122, 0.14);
+  --err: #f0a399;
+  --err-soft: rgba(240, 163, 153, 0.14);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 999px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 30px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 24px 60px rgba(0, 0, 0, 0.42);
+  --shadow-glow: 0 0 0 1px var(--line-accent), 0 0 28px var(--accent-glow);
+
+  --font: "Segoe UI Variable Display", "Segoe UI", "SF Pro Display",
+    "Helvetica Neue", system-ui, sans-serif;
+  --font-text: "Segoe UI Variable Text", "Segoe UI", "SF Pro Text", system-ui,
+    sans-serif;
+  --font-mono: "Cascadia Code", "SF Mono", ui-monospace, monospace;
+
+  --fs-display: clamp(2.4rem, 3.4vw, 3.4rem);
+  --fs-title: 1.35rem;
+  --fs-body: 0.9375rem;
+  --fs-small: 0.8125rem;
+  --fs-micro: 0.6875rem;
+
+  --dur-1: 130ms;
+  --dur-2: 220ms;
+  --dur-3: 380ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --sidebar: 72px;
+  --sidebar-open: 212px;
+  --topbar: 58px;
+  --context: 320px;
+
+  --focus: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 1ms;
+    --dur-2: 1ms;
+    --dur-3: 1ms;
+  }
+}

@@ -1,0 +1,3 @@
+/* Legacy entry kept so a stale import cannot revive the old utility UI. */
+@import "./styles/ui.css";
+@import "./styles/app.css";
