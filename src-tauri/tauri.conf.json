@@ -37,6 +37,7 @@
     "resources": [
       "../worker/transcribe.py",
       "../worker/export_source.py",
+      "../worker/export_output.py",
       "../worker/translate.py",
       "../worker/subtitles.py",
       "../worker/requirements.txt"

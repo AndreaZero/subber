@@ -1,7 +1,13 @@
-import { OUTPUT_LANGUAGES, SPOKEN_LANGUAGES, formatClock, formatMediaDuration } from "../lib/files";
+import {
+  OUTPUT_LANGUAGES,
+  SPOKEN_LANGUAGES,
+  formatClock,
+  formatMediaDuration,
+  languageName,
+} from "../lib/files";
 import { readHardware } from "../lib/hardware";
 import { saveHistory } from "../lib/history";
-import { langShort, phaseLabel, QUALITY_PRESETS } from "../lib/pipeline";
+import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel } from "../lib/pipeline";
 import { useStudio } from "../lib/useStudio";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -20,6 +26,7 @@ import { IconButton } from "../ui/IconButton";
 import { JobCard } from "../ui/JobCard";
 import { Metric } from "../ui/Metric";
 import { Progress } from "../ui/Progress";
+import { ScriptPanel } from "../ui/ScriptPanel";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { ToastViewport } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
@@ -30,19 +37,19 @@ import "../styles/tokens.css";
 import "../styles/ui.css";
 import "../styles/app.css";
 
-const NAV = [
-  { id: "home", label: "Home", icon: <IconHome /> },
-  { id: "jobs", label: "Jobs", icon: <IconJobs /> },
-  { id: "history", label: "History", icon: <IconHistory /> },
-  { id: "glossary", label: "Glossary", icon: <IconGlossary /> },
-  { id: "settings", label: "Settings", icon: <IconSettings /> },
-] as const;
-
 export default function StudioApp() {
   const studio = useStudio();
   const hardware = readHardware();
+  const { tr, uiLang } = studio;
   const showContext = Boolean(studio.selected) && studio.nav !== "settings";
-  const pair = `${langShort(studio.spokenLang)} → ${langShort(studio.outputLang)}`;
+  const pair = `${langShort(studio.spokenLang, uiLang)} → ${langShort(studio.outputLang, uiLang)}`;
+  const nav = [
+    { id: "home" as const, label: tr("navHome"), icon: <IconHome /> },
+    { id: "jobs" as const, label: tr("navJobs"), icon: <IconJobs /> },
+    { id: "history" as const, label: tr("navHistory"), icon: <IconHistory /> },
+    { id: "glossary" as const, label: tr("navGlossary"), icon: <IconGlossary /> },
+    { id: "settings" as const, label: tr("navSettings"), icon: <IconSettings /> },
+  ];
 
   function confirmQuality(next: typeof studio.quality) {
     if (next === "max" && studio.quality !== "max") {
@@ -53,20 +60,20 @@ export default function StudioApp() {
   }
 
   const commands = [
-    { id: "add", label: "Add videos", hint: "Open picker", run: () => void studio.onPickFiles() },
+    { id: "add", label: tr("cmdAdd"), hint: tr("cmdAddHint"), run: () => void studio.onPickFiles() },
     {
       id: "start",
-      label: "Start processing",
-      hint: "Run the pipeline",
+      label: tr("cmdStart"),
+      hint: tr("cmdStartHint"),
       run: () => void studio.runPipeline(),
     },
     {
       id: "output",
-      label: "Open output",
-      hint: "Copy folder path",
+      label: tr("cmdOutput"),
+      hint: tr("cmdOutputHint"),
       run: () => {
         if (studio.outputDir) {
-          void studio.copyText(studio.outputDir, "Output folder copied");
+          void studio.copyText(studio.outputDir, tr("copyFolder"));
         } else {
           void studio.onPickOutput();
         }
@@ -74,13 +81,13 @@ export default function StudioApp() {
     },
     {
       id: "term",
-      label: "Add glossary term",
+      label: tr("cmdTerm"),
       run: () => studio.setNav("glossary"),
     },
-    { id: "settings", label: "Settings", run: () => studio.setNav("settings") },
+    { id: "settings", label: tr("navSettings"), run: () => studio.setNav("settings") },
     {
       id: "cancel",
-      label: "Cancel current job",
+      label: tr("cmdCancel"),
       run: () => studio.requestCancel(),
     },
   ];
@@ -97,7 +104,7 @@ export default function StudioApp() {
             <span>Caravaggio</span>
           </div>
         </div>
-        {NAV.map((item) => (
+        {nav.map((item) => (
           <Tooltip key={item.id} label={item.label}>
             <button
               type="button"
@@ -111,7 +118,7 @@ export default function StudioApp() {
         ))}
         <div className="sidebar-foot">
           <IconButton
-            label={studio.sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+            label={studio.sidebarOpen ? tr("collapseSidebar") : tr("expandSidebar")}
             onClick={() => studio.setSidebarOpen((open) => !open)}
           >
             <IconSidebar />
@@ -122,11 +129,15 @@ export default function StudioApp() {
       <div className="stage">
         <header className="topbar">
           <div className="topbar-title">
-            <h1>{studio.mode === "empty" ? "Studio" : `${studio.videos.length} interviews`}</h1>
+            <h1>
+              {studio.mode === "empty"
+                ? tr("studio")
+                : tr("interviewsCount", { n: studio.videos.length })}
+            </h1>
             <p>
               {studio.working
-                ? `${phaseLabel(studio.phase)} · ${Math.round(studio.progress)}%`
-                : "Local transcription and editorial subtitles"}
+                ? `${phaseLabel(studio.phase, uiLang)} · ${Math.round(studio.progress)}%`
+                : tr("tagline")}
             </p>
           </div>
           <div className="topbar-cluster">
@@ -138,7 +149,7 @@ export default function StudioApp() {
               >
                 {SPOKEN_LANGUAGES.map((lang) => (
                   <option key={lang.id} value={lang.id}>
-                    {lang.label}
+                    {languageName(lang.id, uiLang)}
                   </option>
                 ))}
               </select>
@@ -150,7 +161,7 @@ export default function StudioApp() {
               >
                 {OUTPUT_LANGUAGES.map((lang) => (
                   <option key={lang.id} value={lang.id}>
-                    {lang.label}
+                    {languageName(lang.id, uiLang)}
                   </option>
                 ))}
               </select>
@@ -158,17 +169,35 @@ export default function StudioApp() {
             <SegmentedControl
               value={studio.quality}
               disabled={studio.working}
-              options={QUALITY_PRESETS.map((item) => ({ id: item.id, label: item.label }))}
+              options={QUALITY_PRESETS.map((item) => ({
+                id: item.id,
+                label: qualityLabel(item.id, uiLang),
+              }))}
               onChange={confirmQuality}
+            />
+            <SegmentedControl
+              value={uiLang}
+              options={[
+                { id: "it", label: "IT" },
+                { id: "en", label: "EN" },
+              ]}
+              onChange={studio.setUiLang}
             />
             {studio.working ? (
               <div className="hw-strip">
-                <Metric label="CPU" value={hardware.cpuThreads ? `${hardware.cpuThreads} threads` : "—"} />
                 <Metric
-                  label="RAM"
-                  value={hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : "This PC"}
+                  label={tr("cpu")}
+                  value={
+                    hardware.cpuThreads ? tr("threads", { n: hardware.cpuThreads }) : "—"
+                  }
                 />
-                <Metric label="GPU" value="CPU mode" />
+                <Metric
+                  label={tr("ram")}
+                  value={
+                    hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : tr("thisPc")
+                  }
+                />
+                <Metric label={tr("gpu")} value={tr("gpuCpu")} />
               </div>
             ) : null}
             <Button variant="ghost" onClick={() => studio.setCommandOpen(true)}>
@@ -179,7 +208,7 @@ export default function StudioApp() {
               disabled={studio.locked || studio.videos.length === 0}
               onClick={() => void studio.runPipeline()}
             >
-              {studio.working ? phaseLabel(studio.phase) : "Start"}
+              {studio.working ? phaseLabel(studio.phase, uiLang) : tr("start")}
             </Button>
           </div>
         </header>
@@ -190,6 +219,7 @@ export default function StudioApp() {
               <GlossaryView
                 terms={studio.terms}
                 locked={studio.working}
+                tr={tr}
                 onChange={studio.setTerms}
               />
             ) : null}
@@ -197,6 +227,8 @@ export default function StudioApp() {
             {studio.nav === "history" ? (
               <HistoryView
                 entries={studio.history}
+                uiLang={uiLang}
+                tr={tr}
                 onClear={() => studio.setClearHistoryOpen(true)}
               />
             ) : null}
@@ -214,12 +246,15 @@ export default function StudioApp() {
                 phase={studio.phase}
                 asrModel={studio.qualityMeta.asr}
                 beam={studio.qualityMeta.beam}
+                uiLang={uiLang}
+                tr={tr}
                 onSpoken={studio.setSpokenLang}
                 onOutput={studio.setOutputLang}
                 onQuality={confirmQuality}
                 onOutputDir={studio.setOutputDir}
                 onPickOutput={() => void studio.onPickOutput()}
                 onToggleAdvanced={() => studio.setAdvancedOpen((open) => !open)}
+                onUiLang={studio.setUiLang}
               />
             ) : null}
 
@@ -230,12 +265,14 @@ export default function StudioApp() {
                     <DropZone
                       dragging={studio.dragging}
                       disabled={studio.locked}
+                      title={tr("dropTitle")}
+                      choose={tr("dropChoose")}
                       onPick={() => void studio.onPickFiles()}
                     >
                       <div className="drop-meta">
                         <Badge tone="accent">{pair}</Badge>
-                        <Badge>Local processing</Badge>
-                        <Badge>Private</Badge>
+                        <Badge>{tr("localPrivate")}</Badge>
+                        <Badge>{tr("private")}</Badge>
                       </div>
                     </DropZone>
                     {studio.adding ? (
@@ -251,31 +288,36 @@ export default function StudioApp() {
                       compact
                       dragging={studio.dragging}
                       disabled={studio.locked}
+                      title={tr("dropTitle")}
+                      choose={tr("dropMore")}
                       onPick={() => void studio.onPickFiles()}
                     />
 
                     {studio.working || studio.mode === "processing" || studio.mode === "completed" ? (
                       <div className="run-banner">
                         <Metric
-                          label="Interviews"
+                          label={tr("metricInterviews")}
                           value={`${studio.doneCount} / ${studio.videos.length}`}
                         />
                         <div>
                           <Progress value={studio.progress} mint={studio.phase === "translate"} />
                           <div className="stats" style={{ marginTop: 10 }}>
-                            <Metric label="Elapsed" value={formatClock(studio.elapsedSecs)} />
+                            <Metric label={tr("metricElapsed")} value={formatClock(studio.elapsedSecs)} />
                             {studio.processedSecs > 0 ? (
                               <Metric
-                                label="Processed"
+                                label={tr("metricProcessed")}
                                 value={formatMediaDuration(studio.processedSecs)}
                               />
                             ) : null}
-                            <Metric label="Phase" value={phaseLabel(studio.phase)} />
-                            <Metric label="Progress" value={`${Math.round(studio.progress)}%`} />
+                            <Metric label={tr("metricPhase")} value={phaseLabel(studio.phase, uiLang)} />
+                            <Metric
+                              label={tr("metricProgress")}
+                              value={`${Math.round(studio.progress)}%`}
+                            />
                           </div>
                         </div>
                         <Button variant="ghost" disabled={!studio.working} onClick={studio.requestCancel}>
-                          Stop
+                          {tr("stop")}
                         </Button>
                       </div>
                     ) : null}
@@ -294,6 +336,8 @@ export default function StudioApp() {
                           selected={studio.selectedPath === video.path}
                           locked={studio.locked}
                           working={studio.working}
+                          uiLang={uiLang}
+                          tr={tr}
                           onSelect={() => studio.setSelectedPath(video.path)}
                           onRemove={() => studio.setRemovePath(video.path)}
                           onRetry={() => void studio.runPipeline([video])}
@@ -307,9 +351,9 @@ export default function StudioApp() {
                       <div className="done-cta" style={{ marginTop: 18 }}>
                         <Button
                           variant="primary"
-                          onClick={() => void studio.copyText(studio.outputDir, "Output folder copied")}
+                          onClick={() => void studio.copyText(studio.outputDir, tr("copyFolder"))}
                         >
-                          Open folder
+                          {tr("openFolder")}
                         </Button>
                       </div>
                     ) : null}
@@ -323,20 +367,35 @@ export default function StudioApp() {
 
       {showContext && studio.selected ? (
         <aside className="context">
-          <h2>Context</h2>
+          <h2>{tr("context")}</h2>
+          {studio.selected.frames && studio.selected.frames.length > 0 ? (
+            <div className="context-block">
+              <div className="context-frames">
+                {studio.selected.frames.map((frame, index) => (
+                  <img key={index} src={frame} alt="" />
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="context-block">
             <strong>{studio.selected.name}</strong>
             <p className="muted">{studio.selected.parentDir}</p>
           </div>
           <div className="context-block">
+            <ScriptPanel script={studio.script} loading={studio.scriptLoading} tr={tr} />
+          </div>
+          <div className="context-block">
             <div className="hw-strip" style={{ display: "flex" }}>
-              <Metric label="CPU" value={hardware.cpuThreads ? `${hardware.cpuThreads}` : "—"} />
-              <Metric label="RAM" value={hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : "—"} />
-              <Metric label="GPU" value="CPU mode" />
-              <Metric label="VRAM" value="—" />
+              <Metric label={tr("cpu")} value={hardware.cpuThreads ? `${hardware.cpuThreads}` : "—"} />
+              <Metric
+                label={tr("ram")}
+                value={hardware.deviceMemoryGb ? `${hardware.deviceMemoryGb} GB` : "—"}
+              />
+              <Metric label={tr("gpu")} value={tr("gpuCpu")} />
+              <Metric label={tr("vram")} value="—" />
             </div>
             <p className="muted" style={{ marginTop: 10 }}>
-              Processing stays on this computer. GPU meters appear when the engine reports them.
+              {tr("contextHint")}
             </p>
           </div>
           {studio.advancedOpen ? (
@@ -347,7 +406,7 @@ export default function StudioApp() {
             </ul>
           ) : (
             <Button variant="ghost" onClick={() => studio.setAdvancedOpen(true)}>
-              Advanced logs
+              {tr("advancedLogs")}
             </Button>
           )}
         </aside>
@@ -356,15 +415,18 @@ export default function StudioApp() {
       <CommandPalette
         open={studio.commandOpen}
         commands={commands}
+        placeholder={tr("cmdSearch")}
+        empty={tr("cmdEmpty")}
+        label={tr("cmdPalette")}
         onClose={() => studio.setCommandOpen(false)}
       />
       <ToastViewport items={studio.toasts} />
 
       <Dialog
         open={studio.removePath != null}
-        title="Remove this interview?"
-        body="It leaves the queue. Files already written on disk stay where they are."
-        confirmLabel="Remove"
+        title={tr("removeTitle")}
+        body={tr("removeBody")}
+        confirmLabel={tr("remove")}
         danger
         onClose={() => studio.setRemovePath(null)}
         onConfirm={() => {
@@ -375,9 +437,9 @@ export default function StudioApp() {
       />
       <Dialog
         open={studio.clearHistoryOpen}
-        title="Clear history?"
-        body="This only clears the local history list, not exported subtitles."
-        confirmLabel="Clear"
+        title={tr("clearHistoryTitle")}
+        body={tr("clearHistoryBody")}
+        confirmLabel={tr("clear")}
         danger
         onClose={() => studio.setClearHistoryOpen(false)}
         onConfirm={() => {
@@ -388,9 +450,9 @@ export default function StudioApp() {
       />
       <Dialog
         open={studio.pendingQuality != null}
-        title="Switch to Best Quality?"
-        body="First run may download Whisper large-v3. Interviews will take longer and use more memory."
-        confirmLabel="Use Best Quality"
+        title={tr("qualityTitle")}
+        body={tr("qualityBody")}
+        confirmLabel={tr("qualityConfirm")}
         onClose={() => studio.setPendingQuality(null)}
         onConfirm={() => {
           if (studio.pendingQuality) {

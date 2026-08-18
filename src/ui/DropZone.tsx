@@ -5,11 +5,13 @@ type Props = {
   dragging: boolean;
   disabled?: boolean;
   compact?: boolean;
+  title: string;
+  choose: string;
   onPick: () => void;
   children?: ReactNode;
 };
 
-export function DropZone({ dragging, disabled, compact, onPick, children }: Props) {
+export function DropZone({ dragging, disabled, compact, title, choose, onPick, children }: Props) {
   if (compact) {
     return (
       <button
@@ -18,7 +20,7 @@ export function DropZone({ dragging, disabled, compact, onPick, children }: Prop
         onClick={onPick}
         disabled={disabled}
       >
-        <span>Drop more interviews, or choose files</span>
+        <span>{choose}</span>
         {children}
       </button>
     );
@@ -34,8 +36,8 @@ export function DropZone({ dragging, disabled, compact, onPick, children }: Prop
       <span className="drop-icon">
         <IconDrop />
       </span>
-      <h2>Drop your interviews</h2>
-      <span className="choose">or choose files</span>
+      <h2>{title}</h2>
+      <span className="choose">{choose}</span>
       {children}
     </button>
   );

@@ -1,3 +1,5 @@
+import type { UiLang } from "./i18n";
+
 export type LangCode = string;
 
 export const DEFAULT_SPOKEN_LANG = "fr";
@@ -111,3 +113,19 @@ export const SPOKEN_LANGUAGES: { id: LangCode; label: string }[] = [
 export const OUTPUT_LANGUAGES: { id: LangCode; label: string }[] = SPOKEN_LANGUAGES.filter(
   (lang) => lang.id !== "auto",
 );
+
+export function languageName(code: string, lang: UiLang): string {
+  const id = (code || "").trim().toLowerCase();
+  if (!id || id === "auto" || id === "und") {
+    return lang === "it" ? "Rileva automaticamente" : "Detect automatically";
+  }
+  try {
+    const name = new Intl.DisplayNames([lang], { type: "language" }).of(id.split("-")[0]);
+    if (name) {
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    }
+  } catch {
+    // ignore
+  }
+  return id.toUpperCase();
+}

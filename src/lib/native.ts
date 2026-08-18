@@ -5,10 +5,14 @@ import type {
   ExportBatchResult,
   ExportJob,
   InspectResult,
+  OutputExportBatchResult,
+  OutputExportJob,
+  ScriptFile,
   TranscribeBatchResult,
   TranscribeJob,
   TranslateBatchResult,
   TranslateJob,
+  VideoPreview,
 } from "./files";
 
 const VIDEO_FILTER = {
@@ -28,6 +32,17 @@ export async function inspectVideos(paths: string[]): Promise<InspectResult> {
     return { videos: [], skipped: [] };
   }
   return invoke<InspectResult>("inspect_videos", { paths });
+}
+
+export async function previewVideos(videoPaths: string[]): Promise<VideoPreview[]> {
+  if (videoPaths.length === 0) {
+    return [];
+  }
+  return invoke<VideoPreview[]>("preview_videos", { videoPaths });
+}
+
+export async function readScript(path: string): Promise<ScriptFile> {
+  return invoke<ScriptFile>("read_script", { path });
 }
 
 export async function extractAudio(
@@ -58,6 +73,12 @@ export async function exportSource(
   items: ExportJob[],
 ): Promise<ExportBatchResult> {
   return invoke<ExportBatchResult>("export_source", { items });
+}
+
+export async function exportOutput(
+  items: OutputExportJob[],
+): Promise<OutputExportBatchResult> {
+  return invoke<OutputExportBatchResult>("export_output", { items });
 }
 
 export async function translateSegments(

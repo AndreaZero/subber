@@ -1,15 +1,19 @@
 import { useRef, useState } from "react";
 import type { GlossaryPreset } from "../lib/glossary";
 import { loadPresets, parseTerms, savePresets } from "../lib/glossary";
+import type { Msg } from "../lib/i18n";
 import { Button } from "../ui/Button";
+
+type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
 
 type Props = {
   terms: string[];
   locked: boolean;
+  tr: Tr;
   onChange: (terms: string[]) => void;
 };
 
-export function GlossaryView({ terms, locked, onChange }: Props) {
+export function GlossaryView({ terms, locked, tr, onChange }: Props) {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -37,16 +41,16 @@ export function GlossaryView({ terms, locked, onChange }: Props) {
   return (
     <div>
       <div className="page-head">
-        <p className="kicker">Protected terms</p>
-        <h2>Glossary</h2>
-        <p>Names, places, and works stay exact in transcription and translation.</p>
+        <p className="kicker">{tr("glossaryKicker")}</p>
+        <h2>{tr("glossaryTitle")}</h2>
+        <p>{tr("glossaryLead")}</p>
       </div>
 
       <div className="glossary-add">
         <input
           value={draft}
           disabled={locked}
-          placeholder="Add a term and press Enter"
+          placeholder={tr("glossaryPlaceholder")}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -56,10 +60,10 @@ export function GlossaryView({ terms, locked, onChange }: Props) {
           }}
         />
         <Button disabled={locked || !draft.trim()} onClick={() => addTerm(draft)}>
-          Add
+          {tr("add")}
         </Button>
         <Button variant="ghost" disabled={locked} onClick={() => fileRef.current?.click()}>
-          Import
+          {tr("import")}
         </Button>
         <input
           ref={fileRef}
@@ -126,7 +130,7 @@ export function GlossaryView({ terms, locked, onChange }: Props) {
           <input
             value={presetName}
             disabled={locked}
-            placeholder="Preset name"
+            placeholder={tr("presetName")}
             onChange={(event) => setPresetName(event.target.value)}
           />
           <Button
@@ -142,11 +146,11 @@ export function GlossaryView({ terms, locked, onChange }: Props) {
               savePresets(next);
             }}
           >
-            Save preset
+            {tr("savePreset")}
           </Button>
         </div>
         {presets.length === 0 ? (
-          <p className="muted">No saved presets yet.</p>
+          <p className="muted">{tr("noPresets")}</p>
         ) : (
           <div className="ui-chips">
             {presets.map((preset) => (

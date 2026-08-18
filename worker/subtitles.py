@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List, Sequence
 
 MAX_CHARS = 42
@@ -147,3 +148,41 @@ def render_srt(cues: Sequence[Dict]) -> str:
             + "\n".join(lines)
         )
     return "\n\n".join(chunks) + ("\n" if chunks else "")
+
+
+def language_code(data: dict, *keys: str) -> str:
+    for key in keys or ("language",):
+        lang = str(data.get(key) or "").strip().lower()
+        if lang and lang not in ("auto", "unknown"):
+            return lang.replace("_", "-").split("-")[0]
+    return "und"
+
+
+def sidecar_stem(path: Path, data: dict) -> str:
+    audio = data.get("audioPath")
+    if audio:
+        return Path(str(audio)).stem
+    name = path.name
+    for suffix in (".asr.json", ".trl.json"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return path.stem
+
+
+def package_dir(sidecar_path: Path, stem: str) -> Path:
+    folder = sidecar_path.parent / stem
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def segments_for_captions(segments: Sequence[Dict], text_key: str = "text") -> List[Dict]:
+    out: List[Dict] = []
+    for raw in segments:
+        out.append(
+            {
+                "start": raw.get("start"),
+                "end": raw.get("end"),
+                "text": raw.get(text_key) or "",
+            }
+        )
+    return out

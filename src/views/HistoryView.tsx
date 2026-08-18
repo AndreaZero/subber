@@ -1,28 +1,33 @@
 import { type HistoryEntry } from "../lib/history";
+import type { Msg, UiLang } from "../lib/i18n";
 import { langShort } from "../lib/pipeline";
 import { Button } from "../ui/Button";
 import { StatusPill } from "../ui/StatusPill";
 
+type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
+
 type Props = {
   entries: HistoryEntry[];
+  uiLang: UiLang;
+  tr: Tr;
   onClear: () => void;
 };
 
-export function HistoryView({ entries, onClear }: Props) {
+export function HistoryView({ entries, uiLang, tr, onClear }: Props) {
   return (
     <div>
       <div className="page-head">
-        <p className="kicker">Recent work</p>
-        <h2>History</h2>
-        <p>Completed and failed interviews from this machine.</p>
+        <p className="kicker">{tr("historyKicker")}</p>
+        <h2>{tr("historyTitle")}</h2>
+        <p>{tr("historyLead")}</p>
       </div>
       {entries.length === 0 ? (
-        <p className="muted">Nothing processed yet.</p>
+        <p className="muted">{tr("nothingYet")}</p>
       ) : (
         <>
           <div style={{ marginBottom: 12 }}>
             <Button variant="ghost" onClick={onClear}>
-              Clear history
+              {tr("clearHistory")}
             </Button>
           </div>
           {entries.map((entry) => (
@@ -30,13 +35,16 @@ export function HistoryView({ entries, onClear }: Props) {
               <div>
                 <strong>{entry.name}</strong>
                 <div className="muted">
-                  {new Date(entry.at).toLocaleString()}
+                  {new Date(entry.at).toLocaleString(uiLang === "it" ? "it-IT" : "en-GB")}
                   {entry.spoken && entry.output
-                    ? ` · ${langShort(entry.spoken)} → ${langShort(entry.output)}`
+                    ? ` · ${langShort(entry.spoken, uiLang)} → ${langShort(entry.output, uiLang)}`
                     : ""}
                 </div>
               </div>
-              <StatusPill status={entry.ok ? "completed" : "failed"} />
+              <StatusPill
+                status={entry.ok ? "completed" : "failed"}
+                label={entry.ok ? tr("jobTranslated") : tr("jobError")}
+              />
             </div>
           ))}
         </>

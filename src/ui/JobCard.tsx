@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ListedVideo } from "../lib/files";
 import { formatBytes, formatMediaDuration } from "../lib/files";
+import type { Msg, UiLang } from "../lib/i18n";
 import {
   friendlyError,
   hashHue,
@@ -17,11 +18,15 @@ import { Progress } from "./Progress";
 import { StatusPill } from "./StatusPill";
 import { Waveform } from "./Waveform";
 
+type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
+
 type Props = {
   video: ListedVideo;
   selected: boolean;
   locked: boolean;
   working: boolean;
+  uiLang: UiLang;
+  tr: Tr;
   onSelect: () => void;
   onRemove: () => void;
   onRetry: () => void;
@@ -34,6 +39,8 @@ export function JobCard({
   selected,
   locked,
   working,
+  uiLang,
+  tr,
   onSelect,
   onRemove,
   onRetry,
@@ -41,13 +48,14 @@ export function JobCard({
   onCopy,
 }: Props) {
   const [menu, setMenu] = useState(false);
-  const stages = jobStages(video);
+  const stages = jobStages(video, uiLang);
   const hue = hashHue(video.name);
   const percent = Math.round(video.percent ?? (video.status === "translated" ? 100 : 0));
-  const error = video.status === "error" && video.error ? friendlyError(video.error) : null;
+  const error = video.status === "error" && video.error ? friendlyError(video.error, uiLang) : null;
   const live = video.status === "transcribing";
   const translating = video.status === "translating";
   const done = video.status === "translated";
+  const frames = video.frames ?? [];
 
   return (
     <article
@@ -55,11 +63,19 @@ export function JobCard({
       onClick={onSelect}
     >
       <div className="thumb" aria-hidden="true">
-        <span
-          style={{
-            background: `linear-gradient(145deg, hsl(${hue} 28% 22%), hsl(${(hue + 40) % 360} 36% 10%))`,
-          }}
-        />
+        {frames.length > 0 ? (
+          <div className={`thumb-frames is-${Math.min(frames.length, 3)}`}>
+            {frames.slice(0, 3).map((frame, index) => (
+              <img key={index} src={frame} alt="" />
+            ))}
+          </div>
+        ) : (
+          <span
+            style={{
+              background: `linear-gradient(145deg, hsl(${hue} 28% 22%), hsl(${(hue + 40) % 360} 36% 10%))`,
+            }}
+          />
+        )}
         {video.durationSecs != null ? (
           <b>{formatMediaDuration(video.durationSecs)}</b>
         ) : null}
@@ -69,8 +85,8 @@ export function JobCard({
         <h3>{video.name}</h3>
         <div className="job-meta">
           <span>{formatBytes(video.sizeBytes)}</span>
-          {video.spokenCode ? <span>{langShort(video.spokenCode)}</span> : null}
-          <StatusPill status={video.status} label={jobPhaseLabel(video)} />
+          {video.spokenCode ? <span>{langShort(video.spokenCode, uiLang)}</span> : null}
+          <StatusPill status={video.status} label={jobPhaseLabel(video, uiLang)} />
         </div>
 
         {video.status !== "queued" && video.status !== "error" ? (
@@ -98,7 +114,7 @@ export function JobCard({
         {live ? (
           <div className="live-row">
             <Waveform />
-            <p className="live-text">{video.message || "Listening for speech…"}</p>
+            <p className="live-text">{video.message || tr("listening")}</p>
           </div>
         ) : null}
 
@@ -106,27 +122,27 @@ export function JobCard({
           <div className="translate-live">
             <article>
               <b>{langCodeLabel(video.spokenCode || "fr")}</b>
-              <p>Source lines stay intact while the editorial pass runs.</p>
+              <p>{tr("translateSourceHint")}</p>
             </article>
             <span aria-hidden="true">↓</span>
             <article>
               <b>{langCodeLabel(video.outputCode || "it")}</b>
-              <p>{video.message || "Translating with neighbouring context…"}</p>
+              <p>{video.message || tr("translatingHint")}</p>
             </article>
           </div>
         ) : null}
 
         {done ? (
           <div className="done-cta">
-            {video.srtPath ? (
+            {video.folderPath ? (
               <Button
                 variant="ghost"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCopy(video.srtPath!, "Source SRT path copied");
+                  onCopy(video.folderPath!, tr("copyFolder"));
                 }}
               >
-                Preview subtitles
+                {tr("openFolder")}
               </Button>
             ) : null}
             {video.srtPath ? (
@@ -134,10 +150,10 @@ export function JobCard({
                 variant="ghost"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCopy(video.srtPath!, "SRT path copied — import this file in DaVinci");
+                  onCopy(video.srtPath!, tr("copySrt"));
                 }}
               >
-                Import in DaVinci
+                {tr("importDavinci")}
               </Button>
             ) : null}
           </div>
@@ -156,16 +172,16 @@ export function JobCard({
                   onRetry();
                 }}
               >
-                Retry
+                {tr("retry")}
               </Button>
               <Button
                 variant="ghost"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCopy(video.error || "", "Details copied");
+                  onCopy(video.error || "", tr("details"));
                 }}
               >
-                Details
+                {tr("details")}
               </Button>
             </div>
           </div>
@@ -175,7 +191,7 @@ export function JobCard({
       <div className="job-actions">
         {working && (video.status === "extracting" || video.status === "transcribing" || video.status === "translating" || video.status === "exporting") ? (
           <IconButton
-            label="Stop after this step"
+            label={tr("stopStep")}
             onClick={(event) => {
               event.stopPropagation();
               onCancel();
@@ -185,7 +201,7 @@ export function JobCard({
           </IconButton>
         ) : null}
         <IconButton
-          label="Actions"
+          label={tr("actions")}
           onClick={(event) => {
             event.stopPropagation();
             setMenu((open) => !open);
@@ -197,21 +213,21 @@ export function JobCard({
           <button
             type="button"
             onClick={() => {
-              onCopy(video.path, "File path copied");
+              onCopy(video.path, tr("copyPath"));
               setMenu(false);
             }}
           >
-            Copy path
+            {tr("copyPath")}
           </button>
           {video.srtPath ? (
             <button
               type="button"
               onClick={() => {
-                onCopy(video.srtPath!, "SRT path copied");
+                onCopy(video.srtPath!, tr("copySrt"));
                 setMenu(false);
               }}
             >
-              Copy SRT path
+              {tr("copySrt")}
             </button>
           ) : null}
           <button
@@ -223,7 +239,7 @@ export function JobCard({
               onRemove();
             }}
           >
-            Remove
+            {tr("remove")}
           </button>
         </Popover>
       </div>

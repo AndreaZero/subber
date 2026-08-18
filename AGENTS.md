@@ -10,7 +10,7 @@ Default UI: lingua parlata **Francese** (documentario Caravaggio), sottotitoli *
 
 Mai `task=translate` di Whisper come unico output. Mai tradurre l’audio diretto in italiano.
 
-Output per video: `{nome}.{lingua}.txt`, `{nome}.{lingua}.srt` (trascrizione), poi `{nome}.{output}.srt` e `{nome}.json` dopo la traduzione.
+Output per video: cartella `{outputDir}/{stem}/` con `{nome}.{lingua}.txt`, `{nome}.{lingua}.srt`, `{nome}.{output}.srt`, `{nome}.json`.
 
 ## Stack
 
@@ -23,8 +23,8 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
 3. **Fatto:** trascrizione + timestamp (faster-whisper, `task=transcribe`, qualsiasi lingua)  
 4. **Fatto:** export `{lang}.txt` / `{lang}.srt`  
 5. **Fatto:** traduzione contestuale (default FR→IT, lingua output selezionabile)  
-6. Formatter SRT nella lingua di output  
-7. Export `{output}.srt` + `.json`  
+6. **Fatto:** Formatter SRT nella lingua di output  
+7. **Fatto:** Export `{output}.srt` + `.json` in cartella per video  
 8. Glossario (ASR + traduzione)  
 9. Progress / errori  
 10. Editor interno (solo dopo)
@@ -49,9 +49,9 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Worker: `worker/transcribe.py` (mai `task=translate`; `auto` = rilevamento lingua)
 - `export_source(items)` → `{ items[] }`
   - `items` in: `{ videoPath, jsonPath }`
-  - `items` out: `{ videoPath, txtPath, srtPath, language, error }`
-  - File: `{stem}.{lang}.txt` (trascrizione intera) e `{stem}.{lang}.srt` (max 2 righe, ~42 caratteri)
-  - Formatter: `worker/subtitles.py` (riusato in seguito per la lingua di output)
+  - `items` out: `{ videoPath, folderPath, txtPath, srtPath, language, error }`
+  - File in `{outputDir}/{stem}/`: `{stem}.{lang}.txt` (trascrizione intera) e `{stem}.{lang}.srt` (max 2 righe, ~42 caratteri)
+  - Formatter: `worker/subtitles.py` (riusato per la lingua di output)
 - `translate_segments(items, targetLanguage, glossary)` → `{ items[] }`
   - `items` in: `{ videoPath, jsonPath, sourceLanguage? }`
   - `items` out: `{ videoPath, trlPath, sourceLanguage, targetLanguage, segmentCount, error }`
@@ -61,8 +61,18 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Worker: `worker/translate.py` — NLLB-200 locale, mai Whisper `task=translate`
   - Lingua sorgente dal file `.asr.json` (rilevata o scelta). Se uguale all’output, copia senza tradurre
   - Il glossario resta invariato (placeholder)
+- `export_output(items)` → `{ items[] }`
+  - `items` in: `{ videoPath, trlPath }`
+  - `items` out: `{ videoPath, folderPath, srtPath, jsonPath, language, error }`
+  - Evento `export-output-progress`: `videoPath`, `status` (`exporting` | `done` | `error`), `message`, `percent`
+  - File in `{outputDir}/{stem}/`: `{stem}.{output}.srt` e `{stem}.json`
+  - JSON minimo: `start`, `end`, `text` (sorgente), `translated`, `speaker` se c’è, `confidence` se c’è
+  - Formatter: `worker/subtitles.py`
 
-Plugin UI: `@tauri-apps/plugin-dialog` (`open` file multipli, `open` cartella output).
+- `preview_videos(videoPaths: string[])` → `{ videoPath, frames[], durationSecs }[]`
+  - Estrae fino a 3 fotogrammi JPEG (anteprima) all’aggiunta del video
+- `read_script(path)` → `{ sourceLanguage, targetLanguage, segments[] }`
+  - Legge `.asr.json`, `.trl.json` o `{stem}.json` per mostrare testo e traduzione in app
 
 ## FFmpeg (non scaricato dall’app)
 

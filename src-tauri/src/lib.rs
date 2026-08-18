@@ -5,6 +5,7 @@ mod python;
 mod translate;
 
 use serde::Serialize;
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::AppHandle;
@@ -140,6 +141,89 @@ fn inspect_videos(paths: Vec<String>) -> InspectResult {
     InspectResult { videos, skipped }
 }
 
+fn json_f64(value: &Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| value.as_i64().map(|n| n as f64))
+        .or_else(|| value.as_u64().map(|n| n as f64))
+        .unwrap_or(0.0)
+}
+
+fn json_text(value: &Value) -> String {
+    value.as_str().unwrap_or("").trim().to_string()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScriptSegment {
+    start: f64,
+    end: f64,
+    text: String,
+    translated: Option<String>,
+    speaker: Option<String>,
+    confidence: Option<f64>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScriptFile {
+    source_language: Option<String>,
+    target_language: Option<String>,
+    segments: Vec<ScriptSegment>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn read_script(path: String) -> Result<ScriptFile, String> {
+    let raw = fs::read_to_string(&path).map_err(|_| format!("Impossibile leggere {path}"))?;
+    let data: Value =
+        serde_json::from_str(&raw).map_err(|_| "File di testo non valido.".to_string())?;
+    let source_language = data
+        .get("sourceLanguage")
+        .or_else(|| data.get("language"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let target_language = data
+        .get("targetLanguage")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let mut segments = Vec::new();
+    if let Some(list) = data.get("segments").and_then(|v| v.as_array()) {
+        for item in list {
+            let text = json_text(item.get("text").unwrap_or(&Value::Null));
+            let translated = item
+                .get("translated")
+                .map(json_text)
+                .filter(|s| !s.is_empty());
+            if text.is_empty() && translated.is_none() {
+                continue;
+            }
+            segments.push(ScriptSegment {
+                start: json_f64(item.get("start").unwrap_or(&Value::Null)),
+                end: json_f64(item.get("end").unwrap_or(&Value::Null)),
+                text,
+                translated,
+                speaker: item
+                    .get("speaker")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string()),
+                confidence: item.get("confidence").map(json_f64),
+            });
+        }
+    }
+    Ok(ScriptFile {
+        source_language,
+        target_language,
+        segments,
+    })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn preview_videos(video_paths: Vec<String>) -> Vec<ffmpeg::VideoPreview> {
+    tauri::async_runtime::spawn_blocking(move || ffmpeg::preview_videos(&video_paths))
+        .await
+        .unwrap_or_default()
+}
+
 #[tauri::command(rename_all = "camelCase")]
 async fn extract_audio(
     app: AppHandle,
@@ -179,6 +263,16 @@ async fn export_source(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn export_output(
+    app: AppHandle,
+    items: Vec<export::OutputExportJob>,
+) -> Result<export::OutputExportBatchResult, String> {
+    tauri::async_runtime::spawn_blocking(move || export::export_output_batch(&app, &items))
+        .await
+        .map_err(|err| format!("Export interrotto: {err}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 async fn translate_segments(
     app: AppHandle,
     items: Vec<translate::TranslateJob>,
@@ -198,9 +292,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             inspect_videos,
+            preview_videos,
+            read_script,
             extract_audio,
             transcribe_audio,
             export_source,
+            export_output,
             translate_segments
         ])
         .run(tauri::generate_context!())

@@ -1,5 +1,7 @@
 import type { ListedVideo, QualityPreset, VideoJobStatus } from "./files";
 import { overallProgress } from "./files";
+import { languageName } from "./languages";
+import { t, type UiLang } from "./i18n";
 
 export type NavId = "home" | "jobs" | "history" | "glossary" | "settings";
 
@@ -80,59 +82,75 @@ export function qualityInfo(id: QualityPreset): QualityInfo {
   return QUALITY_PRESETS.find((item) => item.id === id) ?? QUALITY_PRESETS[1];
 }
 
-export function phaseLabel(phase: RunPhase): string {
+export function qualityLabel(id: QualityPreset, lang: UiLang): string {
+  switch (id) {
+    case "fast":
+      return t(lang, "qualityFast");
+    case "max":
+      return t(lang, "qualityMax");
+    default:
+      return t(lang, "qualityBalanced");
+  }
+}
+
+export function qualityHint(id: QualityPreset, lang: UiLang): string {
+  switch (id) {
+    case "fast":
+      return t(lang, "qualityFastHint");
+    case "max":
+      return t(lang, "qualityMaxHint");
+    default:
+      return t(lang, "qualityBalancedHint");
+  }
+}
+
+export function phaseLabel(phase: RunPhase, lang: UiLang): string {
   switch (phase) {
     case "extract":
-      return "Audio";
+      return t(lang, "phaseAudio");
     case "transcribe":
-      return "Transcription";
+      return t(lang, "phaseTranscription");
     case "export":
-      return "Subtitles";
+      return t(lang, "phaseSubtitles");
     case "translate":
-      return "Translation";
+      return t(lang, "phaseTranslation");
     default:
-      return "Ready";
+      return t(lang, "phaseReady");
   }
 }
 
-export function jobPhaseLabel(video: ListedVideo): string {
+export function jobPhaseLabel(video: ListedVideo, lang: UiLang): string {
   switch (video.status) {
     case "queued":
-      return "Ready";
+      return t(lang, "jobQueued");
     case "extracting":
-      return "Extracting audio";
+      return t(lang, "jobExtracting");
     case "audio_ready":
-      return "Audio ready";
+      return t(lang, "jobAudioReady");
     case "transcribing":
       return video.spokenCode
-        ? `Transcribing ${langShort(video.spokenCode)}`
-        : "Transcribing";
+        ? t(lang, "jobTranscribingLang", { lang: languageName(video.spokenCode, lang) })
+        : t(lang, "jobTranscribing");
     case "transcribed":
-      return "Transcription ready";
+      return t(lang, "jobTranscribed");
     case "exporting":
-      return "Writing subtitles";
+      return t(lang, "jobExporting");
     case "exported":
-      return "Source subtitles ready";
+      return t(lang, "jobExported");
     case "translating":
-      return "Translation";
+      return t(lang, "jobTranslating");
     case "translated":
-      return "Complete";
+      return t(lang, "jobTranslated");
     case "error":
-      return "Needs attention";
+      return t(lang, "jobError");
   }
 }
 
-export function langShort(code: string): string {
-  const map: Record<string, string> = {
-    fr: "French",
-    it: "Italian",
-    en: "English",
-    es: "Spanish",
-    de: "German",
-    pt: "Portuguese",
-    auto: "Auto",
-  };
-  return map[code] ?? code.toUpperCase();
+export function langShort(code: string, lang: UiLang = "it"): string {
+  if (code === "auto") {
+    return t(lang, "auto");
+  }
+  return languageName(code, lang);
 }
 
 export function langCodeLabel(code: string): string {
@@ -167,7 +185,7 @@ function rank(status: VideoJobStatus): number {
   }
 }
 
-export function jobStages(video: ListedVideo): JobStage[] {
+export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
   if (video.status === "error") {
     const failed: StageKey =
       video.message?.toLowerCase().includes("ffmpeg") ||
@@ -184,12 +202,12 @@ export function jobStages(video: ListedVideo): JobStage[] {
     return [
       {
         key: "audio",
-        label: "Audio",
+        label: t(lang, "stageAudio"),
         status: failed === "audio" ? "failed" : "completed",
       },
       {
         key: "transcription",
-        label: "Transcription",
+        label: t(lang, "stageTranscription"),
         status:
           failed === "transcription"
             ? "failed"
@@ -199,12 +217,12 @@ export function jobStages(video: ListedVideo): JobStage[] {
       },
       {
         key: "translation",
-        label: "Translation",
+        label: t(lang, "stageTranslation"),
         status: failed === "translation" ? "failed" : "pending",
       },
       {
         key: "subtitles",
-        label: "Subtitles",
+        label: t(lang, "stageSubtitles"),
         status: failed === "subtitles" ? "failed" : "pending",
       },
     ];
@@ -216,14 +234,14 @@ export function jobStages(video: ListedVideo): JobStage[] {
   return [
     {
       key: "audio",
-      label: "Audio",
+      label: t(lang, "stageAudio"),
       status:
         r < 1 ? "pending" : video.status === "extracting" ? "running" : "completed",
       percent: video.status === "extracting" ? pct : r >= 2 ? 100 : undefined,
     },
     {
       key: "transcription",
-      label: "Transcription",
+      label: t(lang, "stageTranscription"),
       status:
         r < 3
           ? r === 2
@@ -241,7 +259,7 @@ export function jobStages(video: ListedVideo): JobStage[] {
     },
     {
       key: "translation",
-      label: "Translation",
+      label: t(lang, "stageTranslation"),
       status:
         r < 7
           ? r >= 6
@@ -254,7 +272,7 @@ export function jobStages(video: ListedVideo): JobStage[] {
     },
     {
       key: "subtitles",
-      label: "Subtitles",
+      label: t(lang, "stageSubtitles"),
       status: r >= 8 ? "completed" : r >= 7 ? "preparing" : "pending",
       percent: r >= 8 ? 100 : undefined,
     },
@@ -308,35 +326,20 @@ export function hashHue(input: string): number {
   return Math.abs(hash) % 360;
 }
 
-export function friendlyError(raw: string): { title: string; hint: string } {
+export function friendlyError(raw: string, lang: UiLang): { title: string; hint: string } {
   const text = raw.trim();
   const lower = text.toLowerCase();
   if (lower.includes("ffmpeg")) {
-    return {
-      title: "FFmpeg is missing",
-      hint: "Install FFmpeg, reopen the app, or set FFMPEG_PATH to ffmpeg.exe.",
-    };
+    return { title: t(lang, "errFfmpegTitle"), hint: t(lang, "errFfmpegHint") };
   }
   if (lower.includes("faster-whisper") || lower.includes("venv")) {
-    return {
-      title: "Transcription engine is not ready",
-      hint: "Create the Python environment in the worker folder and install requirements.",
-    };
+    return { title: t(lang, "errAsrTitle"), hint: t(lang, "errAsrHint") };
   }
   if (lower.includes("nllb") || lower.includes("traduz")) {
-    return {
-      title: "Translation could not finish",
-      hint: "Check that the translation model is installed, then retry this interview.",
-    };
+    return { title: t(lang, "errTrlTitle"), hint: t(lang, "errTrlHint") };
   }
   if (lower.includes("file non trovato") || lower.includes("not found")) {
-    return {
-      title: "A file could not be read",
-      hint: "The video may have been moved. Add it again from disk.",
-    };
+    return { title: t(lang, "errFileTitle"), hint: t(lang, "errFileHint") };
   }
-  return {
-    title: "This interview stopped",
-    hint: "Retry the job. Open Details if you need the original message.",
-  };
+  return { title: t(lang, "errGenericTitle"), hint: t(lang, "errGenericHint") };
 }

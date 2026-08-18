@@ -23,6 +23,7 @@ export {
   DEFAULT_SPOKEN_LANG,
   OUTPUT_LANGUAGES,
   SPOKEN_LANGUAGES,
+  languageName,
 } from "./languages";
 
 export type VideoJobStatus =
@@ -41,8 +42,11 @@ export type ListedVideo = VideoFile & {
   status: VideoJobStatus;
   audioPath?: string;
   jsonPath?: string;
+  folderPath?: string;
   txtPath?: string;
   srtPath?: string;
+  outputSrtPath?: string;
+  bundlePath?: string;
   trlPath?: string;
   spokenCode?: string;
   outputCode?: string;
@@ -51,6 +55,7 @@ export type ListedVideo = VideoFile & {
   error?: string;
   percent?: number;
   message?: string;
+  frames?: string[];
   addedAt: number;
 };
 
@@ -104,8 +109,10 @@ export type ExportProgress = {
   status: string;
   message: string;
   percent: number | null;
+  folderPath: string | null;
   txtPath: string | null;
   srtPath: string | null;
+  jsonPath: string | null;
   language: string | null;
 };
 
@@ -116,6 +123,7 @@ export type ExportJob = {
 
 export type ExportItem = {
   videoPath: string;
+  folderPath: string | null;
   txtPath: string | null;
   srtPath: string | null;
   language: string | null;
@@ -124,6 +132,24 @@ export type ExportItem = {
 
 export type ExportBatchResult = {
   items: ExportItem[];
+};
+
+export type OutputExportJob = {
+  videoPath: string;
+  trlPath: string;
+};
+
+export type OutputExportItem = {
+  videoPath: string;
+  folderPath: string | null;
+  srtPath: string | null;
+  jsonPath: string | null;
+  language: string | null;
+  error: string | null;
+};
+
+export type OutputExportBatchResult = {
+  items: OutputExportItem[];
 };
 
 export type TranslateProgress = {
@@ -154,6 +180,27 @@ export type TranslateItem = {
 
 export type TranslateBatchResult = {
   items: TranslateItem[];
+};
+
+export type ScriptSegment = {
+  start: number;
+  end: number;
+  text: string;
+  translated?: string | null;
+  speaker?: string | null;
+  confidence?: number | null;
+};
+
+export type ScriptFile = {
+  sourceLanguage?: string | null;
+  targetLanguage?: string | null;
+  segments: ScriptSegment[];
+};
+
+export type VideoPreview = {
+  videoPath: string;
+  frames: string[];
+  durationSecs: number | null;
 };
 
 export const DEFAULT_GLOSSARY = [
@@ -190,8 +237,11 @@ export function attachListing(
       status: old.status,
       audioPath: old.audioPath,
       jsonPath: old.jsonPath,
+      folderPath: old.folderPath,
       txtPath: old.txtPath,
       srtPath: old.srtPath,
+      outputSrtPath: old.outputSrtPath,
+      bundlePath: old.bundlePath,
       trlPath: old.trlPath,
       spokenCode: old.spokenCode,
       outputCode: old.outputCode,
@@ -200,6 +250,7 @@ export function attachListing(
       error: old.error,
       percent: old.percent,
       message: old.message,
+      frames: old.frames,
       addedAt: old.addedAt ?? Date.now(),
     };
   });
@@ -230,9 +281,11 @@ export function statusLabel(video: ListedVideo): string {
     case "exporting":
       return "Export .txt / .srt";
     case "exported":
-      return video.srtPath
-        ? `Esportato ${video.srtPath.split(/[/\\]/).pop()}`
-        : "File .txt e .srt pronti";
+      return video.folderPath
+        ? "Cartella di export pronta"
+        : video.srtPath
+          ? `Esportato ${video.srtPath.split(/[/\\]/).pop()}`
+          : "File .txt e .srt pronti";
     case "translating":
       return video.percent != null
         ? `Traduzione ${Math.round(video.percent)}%`

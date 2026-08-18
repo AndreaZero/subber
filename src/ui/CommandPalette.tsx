@@ -10,10 +10,13 @@ export type Command = {
 type Props = {
   open: boolean;
   commands: Command[];
+  placeholder: string;
+  empty: string;
+  label: string;
   onClose: () => void;
 };
 
-export function CommandPalette({ open, commands, onClose }: Props) {
+export function CommandPalette({ open, commands, placeholder, empty, label, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
 
@@ -47,10 +50,10 @@ export function CommandPalette({ open, commands, onClose }: Props) {
         }
       }}
     >
-      <div className="cmdk-box" role="dialog" aria-label="Command palette">
+      <div className="cmdk-box" role="dialog" aria-label={label}>
         <input
           autoFocus
-          placeholder="Search actions…"
+          placeholder={placeholder}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -79,7 +82,7 @@ export function CommandPalette({ open, commands, onClose }: Props) {
           {filtered.length === 0 ? (
             <li>
               <button type="button" disabled>
-                No matching action
+                {empty}
               </button>
             </li>
           ) : (

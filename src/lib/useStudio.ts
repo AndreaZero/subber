@@ -14,15 +14,19 @@ import {
   type LangCode,
   type ListedVideo,
   type QualityPreset,
+  type ScriptFile,
   type TranscribeProgress,
   type TranslateProgress,
 } from "./files";
 import {
+  exportOutput,
   exportSource,
   extractAudio,
   inspectVideos,
   pickOutputDir,
   pickVideoFiles,
+  previewVideos,
+  readScript,
   transcribeAudio,
   translateSegments,
 } from "./native";
@@ -37,6 +41,7 @@ import {
   type RunPhase,
 } from "./pipeline";
 import { createToast, type ToastItem } from "./toasts";
+import { loadUiLang, saveUiLang, t, type Msg, type UiLang } from "./i18n";
 
 const SIDEBAR_KEY = "video-sub.sidebar.open";
 
@@ -64,6 +69,9 @@ export function useStudio() {
   const [removePath, setRemovePath] = useState<string | null>(null);
   const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [uiLang, setUiLangState] = useState<UiLang>(loadUiLang);
+  const [script, setScript] = useState<ScriptFile | null>(null);
+  const [scriptLoading, setScriptLoading] = useState(false);
 
   const workingRef = useRef(false);
   const cancelRef = useRef(false);
@@ -74,6 +82,17 @@ export function useStudio() {
   const progress = overallProgress(videos);
   const mode = workspaceMode(videos, working);
   const selected = videos.find((video) => video.path === selectedPath) ?? null;
+  const scriptPath = selected?.bundlePath || selected?.trlPath || selected?.jsonPath || null;
+
+  const tr = useCallback(
+    (key: Msg, vars?: Record<string, string | number>) => t(uiLang, key, vars),
+    [uiLang],
+  );
+
+  const setUiLang = useCallback((next: UiLang) => {
+    setUiLangState(next);
+    saveUiLang(next);
+  }, []);
 
   const toast = useCallback((tone: ToastItem["tone"], title: string, detail?: string) => {
     const item = createToast(tone, title, detail);
@@ -93,10 +112,10 @@ export function useStudio() {
         await navigator.clipboard.writeText(text);
         toast("success", title);
       } catch {
-        toast("error", "Could not copy", text);
+        toast("error", tr("toastCopyFail"), text);
       }
     },
-    [toast],
+    [toast, tr],
   );
 
   const addPaths = useCallback(
@@ -113,29 +132,80 @@ export function useStudio() {
         if (result.videos[0]) {
           setSelectedPath(result.videos[0].path);
         }
+        const incoming = result.videos.map((video) => video.path);
+        if (incoming.length > 0) {
+          void previewVideos(incoming)
+            .then((previews) => {
+              setVideos((current) =>
+                current.map((video) => {
+                  const item = previews.find((entry) => samePath(entry.videoPath, video.path));
+                  if (!item) {
+                    return video;
+                  }
+                  return {
+                    ...video,
+                    frames: item.frames.length > 0 ? item.frames : video.frames,
+                    durationSecs: item.durationSecs ?? video.durationSecs,
+                  };
+                }),
+              );
+            })
+            .catch(() => undefined);
+        }
         if (result.skipped.length > 0) {
           toast(
             "warning",
-            result.skipped.length === 1 ? "1 item skipped" : `${result.skipped.length} items skipped`,
+            result.skipped.length === 1
+              ? tr("toastSkippedOne")
+              : tr("toastSkippedMany", { n: result.skipped.length }),
             result.skipped[0]?.reason,
           );
         } else if (result.videos.length === 1) {
-          toast("success", "Interview added", result.videos[0].name);
+          toast("success", tr("toastAddedOne"), result.videos[0].name);
         } else if (result.videos.length > 1) {
-          toast("success", `${result.videos.length} interviews added`);
+          toast("success", tr("toastAddedMany", { n: result.videos.length }));
         }
       } catch (error) {
-        toast("error", "Could not add files", error instanceof Error ? error.message : String(error));
+        toast("error", tr("toastAddFail"), error instanceof Error ? error.message : String(error));
       } finally {
         setAdding(false);
       }
     },
-    [toast],
+    [toast, tr],
   );
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, sidebarOpen ? "1" : "0");
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!scriptPath) {
+      setScript(null);
+      setScriptLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setScriptLoading(true);
+    readScript(scriptPath)
+      .then((data) => {
+        if (!cancelled) {
+          setScript(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setScript(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setScriptLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [scriptPath]);
 
   useEffect(() => {
     const prevent = (event: DragEvent) => {
@@ -166,7 +236,7 @@ export function useStudio() {
         }
       })
       .catch((error: unknown) => {
-        toast("error", "Drag and drop failed", error instanceof Error ? error.message : String(error));
+        toast("error", tr("toastDropFail"), error instanceof Error ? error.message : String(error));
       });
 
     return () => {
@@ -311,11 +381,12 @@ export function useStudio() {
             };
           }
           if (payload.status === "done") {
-            toast("success", "SRT exported", payload.srtPath?.split(/[/\\]/).pop());
+            toast("success", tr("toastSrt"), payload.srtPath?.split(/[/\\]/).pop());
             return {
               ...video,
               status: "exported",
               percent: 100,
+              folderPath: payload.folderPath ?? video.folderPath,
               txtPath: payload.txtPath ?? video.txtPath,
               srtPath: payload.srtPath ?? video.srtPath,
               spokenCode: payload.language ?? video.spokenCode,
@@ -344,7 +415,7 @@ export function useStudio() {
       disposed = true;
       unlisten?.();
     };
-  }, [log, toast]);
+  }, [log, toast, tr]);
 
   useEffect(() => {
     let disposed = false;
@@ -371,7 +442,7 @@ export function useStudio() {
           if (payload.status === "done") {
             return {
               ...video,
-              status: "translated",
+              status: "translating",
               percent: 100,
               trlPath: payload.trlPath ?? video.trlPath,
               spokenCode: payload.sourceLanguage ?? video.spokenCode,
@@ -404,6 +475,66 @@ export function useStudio() {
   }, [log]);
 
   useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    listen<ExportProgress>("export-output-progress", (event) => {
+      const payload = event.payload;
+      log(`${payload.status}: ${payload.message}`);
+      setVideos((current) =>
+        current.map((video) => {
+          if (!samePath(video.path, payload.videoPath)) {
+            return video;
+          }
+          if (payload.status === "exporting") {
+            return {
+              ...video,
+              status: "translating",
+              percent: payload.percent ?? video.percent,
+              folderPath: payload.folderPath ?? video.folderPath,
+              message: payload.message,
+              error: undefined,
+            };
+          }
+          if (payload.status === "done") {
+            toast("success", tr("toastExportFolder"), payload.folderPath?.split(/[/\\]/).pop());
+            return {
+              ...video,
+              status: "translated",
+              percent: 100,
+              folderPath: payload.folderPath ?? video.folderPath,
+              outputSrtPath: payload.srtPath ?? video.outputSrtPath,
+              bundlePath: payload.jsonPath ?? video.bundlePath,
+              srtPath: payload.srtPath ?? video.srtPath,
+              outputCode: payload.language ?? video.outputCode,
+              message: payload.message,
+              error: undefined,
+            };
+          }
+          return {
+            ...video,
+            status: "error",
+            error: payload.message,
+            message: payload.message,
+            percent: undefined,
+          };
+        }),
+      );
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [log, toast, tr]);
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -429,7 +560,7 @@ export function useStudio() {
       const paths = await pickVideoFiles();
       await addPaths(paths);
     } catch (error) {
-      toast("error", "Could not open files", error instanceof Error ? error.message : String(error));
+      toast("error", tr("toastOpenFail"), error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -438,26 +569,26 @@ export function useStudio() {
       const dir = await pickOutputDir();
       if (dir) {
         setOutputDir(dir);
-        toast("info", "Output folder set");
+        toast("info", tr("toastFolderSet"));
       }
     } catch (error) {
-      toast("error", "Could not choose folder", error instanceof Error ? error.message : String(error));
+      toast("error", tr("toastFolderFail"), error instanceof Error ? error.message : String(error));
     }
   }
 
   function requestCancel() {
     cancelRef.current = true;
-    toast("warning", "Stopping after this step");
+    toast("warning", tr("toastStopping"));
   }
 
   async function runPipeline(targetVideos?: ListedVideo[]) {
     const batch = targetVideos ?? videos;
     if (batch.length === 0) {
-      toast("error", "Add at least one interview");
+      toast("error", tr("toastNeedVideo"));
       return;
     }
     if (!outputDir.trim()) {
-      toast("error", "Choose an output folder first");
+      toast("error", tr("toastNeedFolder"));
       setNav("settings");
       return;
     }
@@ -479,9 +610,12 @@ export function useStudio() {
               percent: 0,
               error: undefined,
               jsonPath: undefined,
+              folderPath: undefined,
               segmentCount: undefined,
               txtPath: undefined,
               srtPath: undefined,
+              outputSrtPath: undefined,
+              bundlePath: undefined,
               trlPath: undefined,
               message: undefined,
             }
@@ -512,7 +646,7 @@ export function useStudio() {
       );
 
       if (cancelRef.current) {
-        toast("info", "Stopped after audio");
+        toast("info", tr("toastStoppedAudio"));
         return;
       }
 
@@ -520,7 +654,7 @@ export function useStudio() {
         item.audioPath && !item.error ? [{ videoPath: item.videoPath, audioPath: item.audioPath }] : [],
       );
       if (jobs.length === 0) {
-        toast("error", "No audio to transcribe");
+        toast("error", tr("toastNoAudio"));
         return;
       }
 
@@ -547,7 +681,7 @@ export function useStudio() {
       );
 
       if (cancelRef.current) {
-        toast("info", "Stopped after transcription");
+        toast("info", tr("toastStoppedTranscribe"));
         return;
       }
 
@@ -555,7 +689,7 @@ export function useStudio() {
         item.jsonPath && !item.error ? [{ videoPath: item.videoPath, jsonPath: item.jsonPath }] : [],
       );
       if (exportJobs.length === 0) {
-        toast("error", "Transcription produced no files");
+        toast("error", tr("toastNoTranscript"));
         return;
       }
 
@@ -573,6 +707,7 @@ export function useStudio() {
           return {
             ...video,
             status: "exported",
+            folderPath: item.folderPath ?? undefined,
             txtPath: item.txtPath ?? undefined,
             srtPath: item.srtPath ?? undefined,
             spokenCode: item.language ?? undefined,
@@ -583,7 +718,7 @@ export function useStudio() {
       );
 
       if (cancelRef.current) {
-        toast("info", "Stopped after subtitles");
+        toast("info", tr("toastStoppedSubs"));
         return;
       }
 
@@ -599,7 +734,7 @@ export function useStudio() {
           : [],
       );
       if (translateJobs.length === 0) {
-        toast("error", "Nothing to translate");
+        toast("error", tr("toastNothingTranslate"));
         return;
       }
 
@@ -616,7 +751,7 @@ export function useStudio() {
           }
           return {
             ...video,
-            status: "translated",
+            status: "translating",
             trlPath: item.trlPath ?? undefined,
             spokenCode: item.sourceLanguage ?? video.spokenCode,
             outputCode: item.targetLanguage ?? outputLang,
@@ -625,13 +760,51 @@ export function useStudio() {
           };
         }),
       );
-      for (const item of translated.items) {
+
+      if (cancelRef.current) {
+        toast("info", tr("toastStoppedTranslate"));
+        return;
+      }
+
+      const outputJobs = translated.items.flatMap((item) =>
+        item.trlPath && !item.error ? [{ videoPath: item.videoPath, trlPath: item.trlPath }] : [],
+      );
+      if (outputJobs.length === 0) {
+        toast("error", tr("toastNoTranslateFiles"));
+        return;
+      }
+
+      setPhase("export");
+      const packed = await exportOutput(outputJobs);
+      setVideos((current) =>
+        current.map((video) => {
+          const item = packed.items.find((entry) => samePath(entry.videoPath, video.path));
+          if (!item) {
+            return video;
+          }
+          if (item.error) {
+            return { ...video, status: "error", error: item.error, percent: undefined };
+          }
+          return {
+            ...video,
+            status: "translated",
+            folderPath: item.folderPath ?? video.folderPath,
+            outputSrtPath: item.srtPath ?? undefined,
+            bundlePath: item.jsonPath ?? undefined,
+            srtPath: item.srtPath ?? video.srtPath,
+            outputCode: item.language ?? video.outputCode,
+            percent: 100,
+            error: undefined,
+          };
+        }),
+      );
+      for (const item of packed.items) {
         if (item.error) {
           continue;
         }
         const video = batch.find((entry) => samePath(entry.path, item.videoPath));
         if (video) {
-          toast("success", `${video.name} completed`);
+          toast("success", tr("toastCompleted", { name: video.name }));
         }
       }
 
@@ -639,17 +812,36 @@ export function useStudio() {
         result.items.filter((item) => item.error).length +
         transcript.items.filter((item) => item.error).length +
         exported.items.filter((item) => item.error).length +
-        translated.items.filter((item) => item.error).length;
-      const ok = translated.items.filter((item) => !item.error).length;
+        translated.items.filter((item) => item.error).length +
+        packed.items.filter((item) => item.error).length;
+      const ok = packed.items.filter((item) => !item.error).length;
 
       const snapshot: HistoryEntry[] = [];
-      for (const item of translated.items) {
+      for (const item of packed.items) {
+        const translatedItem = translated.items.find((entry) =>
+          samePath(entry.videoPath, item.videoPath),
+        );
         const video = batch.find((entry) => samePath(entry.path, item.videoPath));
         snapshot.push({
           id: `${item.videoPath}-${Date.now()}`,
           name: video?.name ?? item.videoPath,
           at: Date.now(),
           ok: !item.error,
+          spoken: translatedItem?.sourceLanguage ?? undefined,
+          output: item.language ?? translatedItem?.targetLanguage ?? undefined,
+          detail: item.error ?? undefined,
+        });
+      }
+      for (const item of translated.items) {
+        if (!item.error) {
+          continue;
+        }
+        const video = batch.find((entry) => samePath(entry.path, item.videoPath));
+        snapshot.push({
+          id: `${item.videoPath}-${Date.now()}`,
+          name: video?.name ?? item.videoPath,
+          at: Date.now(),
+          ok: false,
           spoken: item.sourceLanguage ?? undefined,
           output: item.targetLanguage ?? undefined,
           detail: item.error ?? undefined,
@@ -665,13 +857,13 @@ export function useStudio() {
 
       if (failed === 0) {
         if (ok > 1) {
-          toast("success", `${ok} interviews completed`);
+          toast("success", tr("toastManyDone", { n: ok }));
         }
       } else {
-        toast("warning", "Finished with errors", `${ok} completed`);
+        toast("warning", tr("toastWithErrors"), tr("toastOkCount", { n: ok }));
       }
     } catch (error) {
-      toast("error", "Processing stopped", error instanceof Error ? error.message : String(error));
+      toast("error", tr("toastStopped"), error instanceof Error ? error.message : String(error));
       log(error instanceof Error ? error.message : String(error));
     } finally {
       setWorking(false);
@@ -712,6 +904,11 @@ export function useStudio() {
     selectedPath,
     setSelectedPath,
     selected,
+    script,
+    scriptLoading,
+    uiLang,
+    setUiLang,
+    tr,
     toasts,
     history,
     setHistory,

@@ -419,3 +419,128 @@ pub fn extract_audio_batch(
         items,
     })
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoPreview {
+    pub video_path: String,
+    pub frames: Vec<String>,
+    pub duration_secs: Option<f64>,
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    let mut index = 0;
+    while index < data.len() {
+        let b0 = data[index];
+        let b1 = if index + 1 < data.len() { data[index + 1] } else { 0 };
+        let b2 = if index + 2 < data.len() { data[index + 2] } else { 0 };
+        let triple = (u32::from(b0) << 16) | (u32::from(b1) << 8) | u32::from(b2);
+        out.push(TABLE[((triple >> 18) & 0x3F) as usize] as char);
+        out.push(TABLE[((triple >> 12) & 0x3F) as usize] as char);
+        if index + 1 < data.len() {
+            out.push(TABLE[((triple >> 6) & 0x3F) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if index + 2 < data.len() {
+            out.push(TABLE[(triple & 0x3F) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        index += 3;
+    }
+    out
+}
+
+fn grab_frame(ffmpeg: &Path, video: &Path, at: f64) -> Option<String> {
+    let at = at.max(0.08);
+    let output = ffmpeg_command(ffmpeg)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-ss",
+            &format!("{at:.3}"),
+            "-i",
+        ])
+        .arg(video)
+        .args([
+            "-an",
+            "-frames:v",
+            "1",
+            "-vf",
+            "scale=480:-2",
+            "-q:v",
+            "5",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "mjpeg",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() || output.stdout.len() < 64 {
+        return None;
+    }
+    Some(format!(
+        "data:image/jpeg;base64,{}",
+        base64_encode(&output.stdout)
+    ))
+}
+
+fn preview_times(duration: Option<f64>) -> Vec<f64> {
+    match duration.filter(|total| *total > 0.4) {
+        Some(total) if total < 4.0 => vec![(total * 0.35).max(0.1)],
+        Some(total) => vec![total * 0.12, total * 0.45, total * 0.78]
+            .into_iter()
+            .map(|at| at.clamp(0.1, (total - 0.12).max(0.1)))
+            .collect(),
+        None => vec![1.0, 8.0, 20.0],
+    }
+}
+
+pub fn preview_videos(paths: &[String]) -> Vec<VideoPreview> {
+    let ffmpeg = resolve_ffmpeg().ok();
+    let mut items = Vec::new();
+    for raw in paths {
+        let video = PathBuf::from(raw);
+        let video_path = video.display().to_string();
+        let Some(bin) = ffmpeg.as_ref() else {
+            items.push(VideoPreview {
+                video_path,
+                frames: Vec::new(),
+                duration_secs: None,
+            });
+            continue;
+        };
+        if !video.is_file() {
+            items.push(VideoPreview {
+                video_path,
+                frames: Vec::new(),
+                duration_secs: None,
+            });
+            continue;
+        }
+        let duration_secs = probe_duration(bin, &video);
+        let mut frames = Vec::new();
+        for at in preview_times(duration_secs) {
+            if let Some(frame) = grab_frame(bin, &video, at) {
+                frames.push(frame);
+            }
+            if frames.len() >= 3 {
+                break;
+            }
+        }
+        items.push(VideoPreview {
+            video_path,
+            frames,
+            duration_secs,
+        });
+    }
+    items
+}
