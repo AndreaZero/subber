@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { useStudio } from "../lib/useStudio";
 import type { AudioCoverHandle } from "./AudioCover";
+import { CaptionInspector } from "./CaptionInspector";
 import { MonitorPanel } from "./MonitorPanel";
 import { TranscriptEditor } from "./TranscriptEditor";
 import type { VideoPlayerHandle } from "./VideoPlayer";
@@ -34,7 +35,7 @@ export function StudioFloor({ studio, pair }: Props) {
   }
 
   return (
-    <div className={`studio-floor ${studio.working ? "is-busy" : ""}`}>
+    <div className={`studio-floor ${studio.working ? "is-busy" : ""} ${studio.productMode === "video" ? "is-video" : ""}`}>
       <MonitorPanel
         studio={studio}
         pair={pair}
@@ -44,22 +45,32 @@ export function StudioFloor({ studio, pair }: Props) {
         audioApi={audioApi}
         onSeek={seekAll}
       />
-      <TranscriptEditor
-        title={tr("editDockTitle")}
-        script={studio.script}
-        loading={studio.scriptLoading}
-        working={Boolean(selected && studio.working && !studio.script)}
-        workingLabel={selected?.message || tr("scriptWorking")}
-        workingPercent={selected?.percent}
-        editable={!studio.working && Boolean(studio.script)}
-        saving={studio.scriptSaving}
-        currentTime={clock}
-        empty={!selected}
-        tr={tr}
-        onSave={(segments) => void studio.saveEdits(segments)}
-        onSeek={seekAll}
-        onCopy={(text, title) => void studio.copyText(text, title)}
-      />
+      <div className="studio-editor-col">
+        <TranscriptEditor
+          title={tr("editDockTitle")}
+          script={studio.script}
+          loading={studio.scriptLoading}
+          working={Boolean(selected && studio.working && !studio.script)}
+          workingLabel={selected?.message || tr("scriptWorking")}
+          workingPercent={selected?.percent}
+          editable={!studio.working && Boolean(studio.script)}
+          saving={studio.scriptSaving}
+          currentTime={clock}
+          empty={!selected}
+          tr={tr}
+          onSave={(segments) => void studio.saveEdits(segments)}
+          onSeek={seekAll}
+          onCopy={(text, title) => void studio.copyText(text, title)}
+        />
+        {studio.productMode === "video" ? (
+          <CaptionInspector
+            style={studio.captionStyle}
+            locked={studio.working}
+            tr={tr}
+            onChange={studio.setCaptionStyle}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type RefObject } from "react";
+import { activeCaption, captionText } from "../lib/captions";
 import { isActiveStatus } from "../lib/pipeline";
 import type { useStudio } from "../lib/useStudio";
 import { AudioCover, type AudioCoverHandle } from "./AudioCover";
 import { Badge } from "./Badge";
+import { CaptionOverlay } from "./CaptionOverlay";
 import { DropZone } from "./DropZone";
 import { IconButton } from "./IconButton";
 import { IconFolder, IconResolve } from "./icons";
@@ -29,6 +31,13 @@ export function MonitorPanel({ studio, pair, clock, onClock, videoApi, audioApi,
   const selected = studio.selected;
   const empty = studio.videos.length === 0;
   const busy = Boolean(selected && isActiveStatus(selected.status));
+  const caption = useMemo(() => {
+    if (studio.productMode !== "video" || !studio.script) {
+      return "";
+    }
+    const segment = activeCaption(studio.script.segments, clock);
+    return segment ? captionText(segment) : "";
+  }, [clock, studio.productMode, studio.script]);
 
   const playerActions = useMemo(() => {
     if (!selected) {
@@ -102,6 +111,16 @@ export function MonitorPanel({ studio, pair, clock, onClock, videoApi, audioApi,
               poster={selected?.frames?.[0]}
               tr={tr}
               extraActions={playerActions}
+              overlay={
+                studio.productMode === "video" ? (
+                  <CaptionOverlay
+                    text={caption}
+                    style={studio.captionStyle}
+                    editable={!studio.working && Boolean(studio.script)}
+                    onChange={studio.setCaptionStyle}
+                  />
+                ) : null
+              }
               fallbackReady={Boolean(selected?.audioPath)}
               onTime={onClock}
               onDuration={setDuration}

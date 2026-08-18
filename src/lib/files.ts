@@ -36,6 +36,7 @@ export type VideoJobStatus =
   | "exported"
   | "translating"
   | "translated"
+  | "burning"
   | "error";
 
 export type ListedVideo = VideoFile & {
@@ -57,6 +58,7 @@ export type ListedVideo = VideoFile & {
   message?: string;
   frames?: string[];
   skipTranslation?: boolean;
+  burnedPath?: string;
   addedAt: number;
 };
 
@@ -252,6 +254,45 @@ export type SaveScriptResult = {
   items: SaveScriptItem[];
 };
 
+export type BurnFormat = "mp4" | "mov" | "webm";
+export type BurnResolution = "source" | "1080" | "1440" | "4k";
+
+export type BurnJob = {
+  videoPath: string;
+  assText: string;
+  language?: string | null;
+  folderPath?: string | null;
+  fontDir?: string | null;
+};
+
+export type VideoSize = {
+  width: number;
+  height: number;
+};
+
+export type FontItem = {
+  family: string;
+  path: string;
+};
+
+export type BurnItem = {
+  videoPath: string;
+  outputPath: string | null;
+  error: string | null;
+};
+
+export type BurnBatchResult = {
+  items: BurnItem[];
+};
+
+export type BurnProgress = {
+  videoPath: string;
+  status: "burning" | "done" | "error";
+  message: string;
+  percent: number | null;
+  outputPath: string | null;
+};
+
 export const DEFAULT_GLOSSARY = [
 
 ].join("\n");
@@ -297,6 +338,7 @@ export function attachListing(
       message: old.message,
       frames: old.frames,
       skipTranslation: old.skipTranslation,
+      burnedPath: old.burnedPath,
       addedAt: old.addedAt ?? Date.now(),
     };
   });
@@ -342,6 +384,10 @@ export function statusLabel(video: ListedVideo): string {
         : video.outputCode
           ? `Traduzione pronta (${video.spokenCode || "?"}→${video.outputCode})`
           : "Traduzione pronta";
+    case "burning":
+      return video.percent != null
+        ? `Export video ${Math.round(video.percent)}%`
+        : "Export video";
     case "error":
       return video.error ? `Errore: ${video.error}` : "Errore";
   }
@@ -354,6 +400,9 @@ export function overallProgress(videos: ListedVideo[]): number {
   const sum = videos.reduce((acc, video) => {
     if (video.status === "translated" || video.status === "error") {
       return acc + 1;
+    }
+    if (video.status === "burning") {
+      return acc + 0.92 + ((video.percent ?? 0) / 100) * 0.08;
     }
     if (video.status === "extracting") {
       return acc + ((video.percent ?? 0) / 100) * 0.25;

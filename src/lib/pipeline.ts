@@ -10,6 +10,7 @@ export type RunPhase =
   | "transcribe"
   | "export"
   | "translate"
+  | "burn"
   | null;
 
 export type StageKey = "audio" | "transcription" | "translation" | "subtitles";
@@ -72,6 +73,7 @@ const ACTIVE: VideoJobStatus[] = [
   "transcribing",
   "exporting",
   "translating",
+  "burning",
 ];
 
 export function isActiveStatus(status: VideoJobStatus): boolean {
@@ -114,6 +116,8 @@ export function phaseLabel(phase: RunPhase, lang: UiLang): string {
       return t(lang, "phaseSubtitles");
     case "translate":
       return t(lang, "phaseTranslation");
+    case "burn":
+      return t(lang, "phaseBurn");
     default:
       return t(lang, "phaseReady");
   }
@@ -141,6 +145,8 @@ export function jobPhaseLabel(video: ListedVideo, lang: UiLang): string {
       return t(lang, "jobTranslating");
     case "translated":
       return t(lang, "jobTranslated");
+    case "burning":
+      return t(lang, "jobBurning");
     case "error":
       return t(lang, "jobError");
   }
@@ -180,6 +186,8 @@ function rank(status: VideoJobStatus): number {
       return 7;
     case "translated":
       return 8;
+    case "burning":
+      return 9;
     case "error":
       return -1;
   }
@@ -371,6 +379,9 @@ export function hashHue(input: string): number {
 export function friendlyError(raw: string, lang: UiLang): { title: string; hint: string } {
   const text = raw.trim();
   const lower = text.toLowerCase();
+  if (lower.includes("libass") || (lower.includes("subtitles") && lower.includes("filter"))) {
+    return { title: t(lang, "errLibassTitle"), hint: t(lang, "errLibassHint") };
+  }
   if (lower.includes("ffmpeg")) {
     return { title: t(lang, "errFfmpegTitle"), hint: t(lang, "errFfmpegHint") };
   }

@@ -1,4 +1,15 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { containRect } from "../lib/captions";
 import { formatMediaDuration } from "../lib/files";
 import type { Msg } from "../lib/i18n";
 import { mediaSrc } from "../lib/media";
@@ -36,6 +47,7 @@ type Props = {
   tr: Tr;
   children?: ReactNode;
   extraActions?: PlayerMenuAction[];
+  overlay?: ReactNode;
   fallbackReady?: boolean;
   onTime?: (time: number) => void;
   onDuration?: (duration: number) => void;
@@ -53,6 +65,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     tr,
     children,
     extraActions,
+    overlay,
     fallbackReady,
     onTime,
     onDuration,
@@ -68,6 +81,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
   const posterSrc = useMemo(() => mediaSrc(poster), [poster]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const screenRef = useRef<HTMLDivElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -76,6 +90,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
   const [failed, setFailed] = useState(false);
   const [wide, setWide] = useState(false);
   const [ratio, setRatio] = useState<number | null>(null);
+  const [fit, setFit] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const menu = useMenuPoint();
 
   useImperativeHandle(ref, () => ({
@@ -136,6 +151,26 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     }
   }, [muted, volume]);
 
+  const ar = ratio && ratio > 0 ? ratio : 16 / 9;
+
+  useLayoutEffect(() => {
+    const host = screenRef.current;
+    if (!host) {
+      return;
+    }
+    function measure() {
+      const node = screenRef.current;
+      if (!node) {
+        return;
+      }
+      setFit(containRect(node.clientWidth, node.clientHeight, ar));
+    }
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [ar, src, failed, wide]);
+
   function applySize(width: number, height: number) {
     if (width > 0 && height > 0) {
       setRatio(width / height);
@@ -183,8 +218,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
     onSeek?.(next);
   }
 
-  const ar = ratio && ratio > 0 ? ratio : 16 / 9;
   const canPlay = Boolean((src && !failed) || (failed && fallbackReady));
+  const picture: CSSProperties =
+    fit.w > 0 && fit.h > 0
+      ? { left: fit.x, top: fit.y, width: fit.w, height: fit.h }
+      : { left: 0, top: 0, width: "100%", height: "100%" };
 
   return (
     <div
@@ -194,49 +232,51 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
       onContextMenu={menu.onContextMenu}
     >
       <div className="video-stack">
-        <div className="video-screen" onDoubleClick={() => void toggleWide()}>
-          {src && !failed ? (
-            <video
-              ref={videoRef}
-              src={src}
-              poster={posterSrc || undefined}
-              preload="metadata"
-              playsInline
-              muted={muted}
-              onClick={toggle}
-              onPlay={() => {
-                setPlaying(true);
-                onPlay?.();
-              }}
-              onPause={() => {
-                setPlaying(false);
-                onPause?.();
-              }}
-              onLoadedMetadata={(event) => {
-                const node = event.currentTarget;
-                const next = node.duration || 0;
-                setDuration(next);
-                onDuration?.(next);
-                applySize(node.videoWidth, node.videoHeight);
-              }}
-              onTimeUpdate={(event) => {
-                const at = event.currentTarget.currentTime;
-                setTime(at);
-                onTime?.(at);
-              }}
-              onError={() => setFailed(true)}
-            />
-          ) : posterSrc ? (
-            <img
-              src={posterSrc}
-              alt=""
-              onLoad={(event) =>
-                applySize(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
-              }
-            />
-          ) : (
-            <div className="video-empty" />
-          )}
+        <div ref={screenRef} className="video-screen" onDoubleClick={() => void toggleWide()}>
+          <div className="video-fit" style={picture}>
+            {src && !failed ? (
+              <video
+                ref={videoRef}
+                src={src}
+                poster={posterSrc || undefined}
+                preload="metadata"
+                playsInline
+                muted={muted}
+                onClick={toggle}
+                onPlay={() => {
+                  setPlaying(true);
+                  onPlay?.();
+                }}
+                onPause={() => {
+                  setPlaying(false);
+                  onPause?.();
+                }}
+                onLoadedMetadata={(event) => {
+                  const node = event.currentTarget;
+                  const next = node.duration || 0;
+                  setDuration(next);
+                  onDuration?.(next);
+                  applySize(node.videoWidth, node.videoHeight);
+                }}
+                onTimeUpdate={(event) => {
+                  const at = event.currentTarget.currentTime;
+                  setTime(at);
+                  onTime?.(at);
+                }}
+                onError={() => setFailed(true)}
+              />
+            ) : posterSrc ? (
+              <img
+                src={posterSrc}
+                alt=""
+                onLoad={(event) =>
+                  applySize(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
+                }
+              />
+            ) : (
+              <div className="video-empty" />
+            )}
+          </div>
           {failed ? <p className="video-fallback">{tr("videoUnavailable")}</p> : null}
           <button
             type="button"
@@ -251,6 +291,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, Props>(function VideoPl
               </span>
             )}
           </button>
+          {overlay ? <div className="video-overlay">{overlay}</div> : null}
         </div>
         <div className="player-controls">
           <div className="player-seek">

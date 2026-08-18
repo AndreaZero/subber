@@ -10,7 +10,7 @@ Default UI: lingua parlata **Rileva automaticamente**, sottotitoli **Italiano**.
 
 Mai `task=translate` di Whisper come unico output. Mai tradurre l’audio diretto in italiano.
 
-Output per video: cartella `{outputDir}/{stem}/` con `{nome}.{lingua}.txt`, `{nome}.{lingua}.srt`, `{nome}.{output}.srt`, `{nome}.json`.
+Output per video: cartella `{outputDir}/{stem}/` con `{nome}.{lingua}.txt`, `{nome}.{lingua}.srt`, `{nome}.{output}.srt`, `{nome}.json`. In modalità video anche `{stem}.{lang}.{res}.{ext}`.
 
 ## Stack
 
@@ -27,7 +27,10 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
 7. **Fatto:** Export `{output}.srt` + `.json` in cartella per video  
 8. **Fatto:** Glossario (ASR + traduzione)  
 9. **Fatto:** Progress / errori  
-10. **Fatto:** Editor interno
+11. **Fatto:** Modalità prodotto SRT | video in Home  
+12. **Fatto:** Overlay didascalie + griglia magnetica  
+13. **Fatto:** Stile didascalie (font, colori, posizione)  
+14. **Fatto:** Export video sottotitolato (FFmpeg, fino a 4K)
 
 ## Contratti invoke
 
@@ -92,7 +95,23 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Legge `{folder}/video-sub.json`. `null` se il file non c’è. Errore se la cartella manca.
 - `write_project(folder, project)` → `()`
   - Scrive `{folder}/video-sub.json` (crea la cartella se manca)
-  - `ProjectFile`: `version`, `id`, `name`, `folder`, `createdAt`, `openedAt`, `spokenLang`, `outputLang`, `quality`, `videos[]` (path e artefatti della coda)
+  - `ProjectFile`: `version`, `id`, `name`, `folder`, `createdAt`, `openedAt`, `spokenLang`, `outputLang`, `quality`, `productMode` (`srt` | `video`, default `srt`), `captionStyle`, `videos[]` (path e artefatti della coda, incluso `burnedPath` se c’è)
+- `burn_video(items, format, resolution, outputDir, fit?)` → `{ items[] }`
+  - `items` in: `{ videoPath, assText, language?, folderPath?, fontDir? }`
+  - `items` out: `{ videoPath, outputPath, error }`
+  - Evento `burn-progress`: `videoPath`, `status` (`burning` | `done` | `error`), `message`, `percent`, `outputPath`
+  - Formati: `mp4` (libx264 + AAC), `mov` (stesso), `webm` (VP9 + Opus). Se manca il codec, errore esplicito
+  - Risoluzioni: `source`, `1080`, `1440`, `4k`. Il lato corto è quello nominale: un video verticale a 1080p esce `1080×1920`, non `1920×1080`
+  - Inquadratura `fit`: `source` (default, stessa proporzione del video), `landscape` (16:9), `portrait` (9:16), `square` (1:1). Scale + pad letterbox, niente crop
+  - File in `{outputDir}/{stem}/`: `{stem}.{lang}.{res}.{ext}` (es. `intervista.it.1080p.mp4`, `clip.it.1080p-9x16.mp4`)
+  - ASS dal frontend (`captionsToAss` con PlayRes del canvas di export); FFmpeg filtro `subtitles` (libass). `fontDir` per TTF/OTF caricati. Senza libass, errore chiaro, niente `drawtext`
+  - `Avvia` resta la pipeline SRT. L’export video è un passo dopo l’editor
+- `probe_video(videoPath)` → `{ width, height }`
+  - Dimensione visibile (ruota 90/270 se il file ha metadata di rotazione)
+- `list_fonts()` → `{ fonts: { family, path }[] }`
+  - Font installati sul computer (Windows Fonts + user fonts; su macOS Library/Fonts)
+- `inspect_font(path)` → `{ family, path }`
+  - Legge il nome famiglia da un file `.ttf` / `.otf` / `.ttc` caricato dall’utente
 
 Se lingua parlata = lingua sottotitoli (e non `auto`), la traduzione NLLB non parte e non si scarica. L’SRT sorgente vale anche per DaVinci.
 

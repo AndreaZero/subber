@@ -1,3 +1,9 @@
+import {
+  asProductMode,
+  parseCaptionStyle,
+  type CaptionStyle,
+  type ProductMode,
+} from "./captions";
 import type { ListedVideo, QualityPreset, VideoJobStatus } from "./files";
 
 export const PROJECT_FILE = "video-sub.json";
@@ -25,6 +31,7 @@ export type ProjectVideoSnap = {
   segmentCount?: number;
   durationSecs?: number;
   skipTranslation?: boolean;
+  burnedPath?: string;
   error?: string;
 };
 
@@ -38,6 +45,8 @@ export type ProjectFile = {
   spokenLang: string;
   outputLang: string;
   quality: QualityPreset;
+  productMode: ProductMode;
+  captionStyle: CaptionStyle;
   videos: ProjectVideoSnap[];
 };
 
@@ -84,6 +93,8 @@ export function freezeStatus(video: ListedVideo): VideoJobStatus {
         return "translated";
       }
       return video.srtPath ? "exported" : video.jsonPath ? "transcribed" : "queued";
+    case "burning":
+      return video.trlPath || video.outputSrtPath || video.srtPath ? "translated" : "queued";
     default:
       return video.status;
   }
@@ -111,6 +122,7 @@ export function videoToSnap(video: ListedVideo): ProjectVideoSnap {
   if (video.segmentCount != null) snap.segmentCount = video.segmentCount;
   if (video.durationSecs != null) snap.durationSecs = video.durationSecs;
   if (video.skipTranslation) snap.skipTranslation = true;
+  if (video.burnedPath) snap.burnedPath = video.burnedPath;
   if (snap.status === "error" && video.error) snap.error = video.error;
   return snap;
 }
@@ -149,6 +161,7 @@ export function snapToListed(snap: ProjectVideoSnap): ListedVideo {
     segmentCount: snap.segmentCount,
     durationSecs: snap.durationSecs,
     skipTranslation: snap.skipTranslation,
+    burnedPath: snap.burnedPath,
     error: snap.error,
   };
 }
@@ -163,6 +176,8 @@ export function createProjectFile(input: {
   spokenLang: string;
   outputLang: string;
   quality: QualityPreset;
+  productMode?: ProductMode;
+  captionStyle?: CaptionStyle;
   videos?: ListedVideo[];
   id?: string;
   createdAt?: number;
@@ -178,6 +193,8 @@ export function createProjectFile(input: {
     spokenLang: input.spokenLang,
     outputLang: input.outputLang,
     quality: input.quality,
+    productMode: input.productMode ?? "srt",
+    captionStyle: parseCaptionStyle(input.captionStyle),
     videos: (input.videos ?? []).map(videoToSnap),
   };
 }
@@ -188,6 +205,8 @@ export function buildProjectFile(
     spokenLang: string;
     outputLang: string;
     quality: QualityPreset;
+    productMode: ProductMode;
+    captionStyle: CaptionStyle;
     videos: ListedVideo[];
   },
 ): ProjectFile {
@@ -201,6 +220,8 @@ export function buildProjectFile(
     spokenLang: extras.spokenLang,
     outputLang: extras.outputLang,
     quality: extras.quality,
+    productMode: extras.productMode,
+    captionStyle: parseCaptionStyle(extras.captionStyle),
     videos: extras.videos.map(videoToSnap),
   };
 }
@@ -242,6 +263,7 @@ function parseSnap(raw: unknown): ProjectVideoSnap | null {
     segmentCount: asNumber(item.segmentCount) ?? undefined,
     durationSecs: asNumber(item.durationSecs) ?? undefined,
     skipTranslation: item.skipTranslation === true,
+    burnedPath: asString(item.burnedPath) ?? undefined,
     error: asString(item.error) ?? undefined,
   });
   return videoToSnap(listed);
@@ -263,6 +285,8 @@ export function parseProjectFile(raw: unknown, folder: string): ProjectFile {
     spokenLang: asString(obj.spokenLang) || "auto",
     outputLang: asString(obj.outputLang) || "it",
     quality: asQuality(obj.quality),
+    productMode: asProductMode(obj.productMode),
+    captionStyle: parseCaptionStyle(obj.captionStyle),
     videos,
   };
 }

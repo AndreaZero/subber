@@ -1,12 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "./Button";
 
 type Props = {
   open: boolean;
   title: string;
-  body: string;
+  body?: string;
   confirmLabel: string;
   danger?: boolean;
+  children?: ReactNode;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -17,6 +18,7 @@ export function Dialog({
   body,
   confirmLabel,
   danger,
+  children,
   onClose,
   onConfirm,
 }: Props) {
@@ -78,7 +80,8 @@ export function Dialog({
         aria-labelledby="dialog-title"
       >
         <h3 id="dialog-title">{title}</h3>
-        <p>{body}</p>
+        {body ? <p>{body}</p> : null}
+        {children}
         <div className="ui-dialog-actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel

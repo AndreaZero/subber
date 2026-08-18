@@ -8,6 +8,7 @@ import {
   mergeVideos,
   overallProgress,
   samePath,
+  type BurnProgress,
   type EngineStatus,
   type ExportProgress,
   type ExtractProgress,
@@ -21,6 +22,18 @@ import {
   type TranslateProgress,
 } from "./files";
 import {
+  asBurnFit,
+  asBurnResolution,
+  asProductMode,
+  burnCanvas,
+  captionLangTag,
+  captionsToAss,
+  DEFAULT_CAPTION_STYLE,
+  parseCaptionStyle,
+  type CaptionStyle,
+  type ProductMode,
+} from "./captions";
+import {
   engineStatus,
   exportOutput,
   exportSource,
@@ -32,12 +45,14 @@ import {
   pickVideoFiles,
   prepareModels,
   previewVideos,
+  probeVideo,
   readProject,
   readScript,
   saveScript,
   transcribeAudio,
   translateSegments,
   writeProject,
+  burnVideo,
 } from "./native";
 import { loadActiveGlossary, parseTerms, saveActiveGlossary, serializeTerms } from "./glossary";
 import { loadHistory, makeHistoryEntry, pushHistory, type HistoryEntry } from "./history";
@@ -53,6 +68,7 @@ import {
 } from "./pipeline";
 import { createToast, type ToastItem } from "./toasts";
 import { loadUiLang, saveUiLang, t, type Msg, type UiLang } from "./i18n";
+import { applyCaptionFont } from "./media";
 import {
   buildProjectFile,
   createProjectFile,
@@ -73,6 +89,12 @@ const AUTO_MODELS_KEY = "video-sub.models.auto";
 
 let prepareLock = false;
 
+function parentDir(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  return idx >= 0 ? trimmed.slice(0, idx) : trimmed;
+}
+
 export type PrepareState = {
   active: boolean;
   part: string;
@@ -86,6 +108,8 @@ export function useStudio() {
   const [spokenLang, setSpokenLang] = useState<LangCode>(DEFAULT_SPOKEN_LANG);
   const [outputLang, setOutputLang] = useState<LangCode>(DEFAULT_OUTPUT_LANG);
   const [quality, setQuality] = useState<QualityPreset>("balanced");
+  const [productMode, setProductMode] = useState<ProductMode>("srt");
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(DEFAULT_CAPTION_STYLE);
   const [glossary, setGlossary] = useState(loadActiveGlossary);
   const [outputDir, setOutputDir] = useState("");
   const [project, setProject] = useState<StudioProject | null>(null);
@@ -124,12 +148,20 @@ export function useStudio() {
   const spokenLangRef = useRef(spokenLang);
   const outputLangRef = useRef(outputLang);
   const qualityRef = useRef(quality);
+  const productModeRef = useRef(productMode);
+  const captionStyleRef = useRef(captionStyle);
   workingRef.current = working;
   projectRef.current = project;
   videosRef.current = videos;
   spokenLangRef.current = spokenLang;
   outputLangRef.current = outputLang;
   qualityRef.current = quality;
+  productModeRef.current = productMode;
+  captionStyleRef.current = captionStyle;
+
+  useEffect(() => {
+    applyCaptionFont(captionStyle.fontFamily, captionStyle.fontFile);
+  }, [captionStyle.fontFamily, captionStyle.fontFile]);
 
   const locked = adding || working;
   const needsTranslation = wantsTranslation(spokenLang, outputLang);
@@ -204,6 +236,8 @@ export function useStudio() {
       spokenLang: spokenLangRef.current,
       outputLang: outputLangRef.current,
       quality: qualityRef.current,
+      productMode: productModeRef.current,
+      captionStyle: captionStyleRef.current,
       videos: videosRef.current,
     });
     try {
@@ -229,6 +263,8 @@ export function useStudio() {
       setSpokenLang(file.spokenLang);
       setOutputLang(file.outputLang);
       setQuality(file.quality);
+      setProductMode(asProductMode(file.productMode));
+      setCaptionStyle(parseCaptionStyle(file.captionStyle));
       setNav("home");
       setScript(null);
       setSelectedPath(null);
@@ -378,6 +414,8 @@ export function useStudio() {
     setVideos([]);
     setSelectedPath(null);
     setScript(null);
+    setProductMode("srt");
+    setCaptionStyle(DEFAULT_CAPTION_STYLE);
     setNav("home");
   }, [persistCurrent, toast, tr]);
 
@@ -586,9 +624,11 @@ export function useStudio() {
       spokenLang,
       outputLang,
       quality,
+      productMode,
+      captionStyle,
       videos: videos.map(videoToSnap),
     });
-  }, [project, spokenLang, outputLang, quality, videos]);
+  }, [project, spokenLang, outputLang, quality, productMode, captionStyle, videos]);
 
   useEffect(() => {
     if (!persistKey) {
@@ -999,6 +1039,63 @@ export function useStudio() {
       unlisten?.();
     };
   }, [log, toast, tr]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    listen<BurnProgress>("burn-progress", (event) => {
+      const payload = event.payload;
+      if (payload.status !== "burning") {
+        log(`${payload.status}: ${payload.message}`);
+      }
+      setVideos((current) =>
+        current.map((video) => {
+          if (!samePath(video.path, payload.videoPath)) {
+            return video;
+          }
+          if (payload.status === "burning") {
+            return {
+              ...video,
+              status: "burning",
+              percent: payload.percent ?? video.percent,
+              message: payload.message,
+              error: undefined,
+            };
+          }
+          if (payload.status === "done") {
+            return {
+              ...video,
+              status: "translated",
+              percent: 100,
+              burnedPath: payload.outputPath ?? video.burnedPath,
+              message: payload.message,
+              error: undefined,
+            };
+          }
+          return {
+            ...video,
+            status:
+              video.outputSrtPath || video.trlPath || video.srtPath ? "translated" : "error",
+            error: payload.message,
+            message: payload.message,
+            percent: video.outputSrtPath || video.trlPath || video.srtPath ? 100 : undefined,
+          };
+        }),
+      );
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [log]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -1550,6 +1647,121 @@ export function useStudio() {
     }
   }
 
+  async function runBurn(format: string, resolution: string, fit = "source") {
+    if (workingRef.current) {
+      return;
+    }
+    if (!outputDir.trim()) {
+      toast("error", tr("toastNeedFolder"));
+      setNav("settings");
+      return;
+    }
+    const targets = selected
+      ? [selected]
+      : videos.filter((video) => video.bundlePath || video.trlPath || video.jsonPath);
+    const ready = targets.filter((video) => video.bundlePath || video.trlPath || video.jsonPath);
+    if (ready.length === 0) {
+      toast("error", tr("toastBurnNeed"));
+      return;
+    }
+
+    const previous = new Map(
+      ready.map((video) => [
+        video.path.toLowerCase(),
+        { status: video.status, percent: video.percent, message: video.message, error: video.error },
+      ]),
+    );
+
+    cancelRef.current = false;
+    setWorking(true);
+    setPhase("burn");
+    setStartedAt(Date.now());
+    setElapsedSecs(0);
+    setVideos((current) =>
+      current.map((video) =>
+        ready.some((item) => samePath(item.path, video.path))
+          ? { ...video, status: "burning", percent: 2, message: tr("phaseBurn"), error: undefined }
+          : video,
+      ),
+    );
+
+    try {
+      const style = captionStyleRef.current;
+      const fontDir = style.fontFile ? parentDir(style.fontFile) : null;
+      const jobs = [];
+      for (const video of ready) {
+        if (cancelRef.current) {
+          break;
+        }
+        const path = video.bundlePath || video.trlPath || video.jsonPath;
+        if (!path) {
+          continue;
+        }
+        const file =
+          selected && samePath(selected.path, video.path) && script
+            ? script
+            : await readScript(path);
+        if (file.segments.length === 0) {
+          continue;
+        }
+        let width = 1920;
+        let height = 1080;
+        try {
+          const size = await probeVideo(video.path);
+          width = size.width;
+          height = size.height;
+        } catch (error) {
+          toast("error", tr("toastBurnFail"), error instanceof Error ? error.message : String(error));
+          continue;
+        }
+        const canvas = burnCanvas(width, height, asBurnResolution(resolution), asBurnFit(fit));
+        jobs.push({
+          videoPath: video.path,
+          assText: captionsToAss(style, file.segments, canvas.width, canvas.height),
+          language: captionLangTag(video.outputCode || file.targetLanguage || outputLangRef.current),
+          folderPath: video.folderPath ?? null,
+          fontDir,
+        });
+      }
+      if (jobs.length === 0) {
+        toast("error", tr("toastBurnNeed"));
+        setVideos((current) =>
+          current.map((video) => {
+            const snap = previous.get(video.path.toLowerCase());
+            return snap ? { ...video, ...snap } : video;
+          }),
+        );
+        return;
+      }
+      const result = await burnVideo(jobs, format, resolution, outputDir.trim(), asBurnFit(fit));
+      const failed = result.items.filter((item) => item.error);
+      const ok = result.items.length - failed.length;
+      if (failed.length === 0) {
+        toast("success", ok === 1 ? tr("toastBurnDone") : tr("toastManyDone", { n: ok }));
+        const first = result.items.find((item) => item.outputPath)?.outputPath;
+        if (first) {
+          void openFolder(first);
+        }
+      } else if (ok > 0) {
+        toast("warning", tr("toastWithErrors"), failed[0]?.error);
+      } else {
+        toast("error", tr("toastBurnFail"), failed[0]?.error);
+      }
+    } catch (error) {
+      toast("error", tr("toastBurnFail"), error instanceof Error ? error.message : String(error));
+      log(error instanceof Error ? error.message : String(error));
+      setVideos((current) =>
+        current.map((video) => {
+          const snap = previous.get(video.path.toLowerCase());
+          return snap ? { ...video, ...snap } : video;
+        }),
+      );
+    } finally {
+      setWorking(false);
+      setPhase(null);
+    }
+  }
+
   return {
     videos,
     setVideos,
@@ -1560,6 +1772,10 @@ export function useStudio() {
     setOutputLang,
     quality,
     setQuality,
+    productMode,
+    setProductMode,
+    captionStyle,
+    setCaptionStyle,
     glossary,
     setGlossary,
     terms,
@@ -1627,6 +1843,7 @@ export function useStudio() {
     onPickOutput,
     requestCancel,
     runPipeline,
+    runBurn,
     saveEdits,
     qualityMeta: qualityInfo(quality),
     doneCount: completedCount(videos),

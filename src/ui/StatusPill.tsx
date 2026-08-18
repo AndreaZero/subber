@@ -25,6 +25,7 @@ function asPill(status: StageStatus | VideoJobStatus): StageStatus {
     case "transcribing":
     case "translating":
     case "exporting":
+    case "burning":
     case "running":
       return "running";
     case "queued":

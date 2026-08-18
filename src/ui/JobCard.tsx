@@ -69,7 +69,8 @@ function JobCardView({
     video.status === "extracting" ||
     video.status === "transcribing" ||
     video.status === "translating" ||
-    video.status === "exporting";
+    video.status === "exporting" ||
+    video.status === "burning";
 
   return (
     <article
@@ -204,7 +205,7 @@ function JobCardView({
       </div>
 
       <div className="job-actions">
-        {working && (video.status === "extracting" || video.status === "transcribing" || video.status === "translating" || video.status === "exporting") ? (
+        {working && (video.status === "extracting" || video.status === "transcribing" || video.status === "translating" || video.status === "exporting" || video.status === "burning") ? (
           <IconButton
             label={tr("stopStep")}
             onClick={(event) => {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   OUTPUT_LANGUAGES,
   SPOKEN_LANGUAGES,
@@ -5,6 +6,7 @@ import {
 } from "../lib/files";
 import { saveHistory } from "../lib/history";
 import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel, isActiveStatus } from "../lib/pipeline";
+import { BURN_FITS, BURN_FORMATS, BURN_RESOLUTIONS, type BurnFit, type BurnFormat, type BurnResolution } from "../lib/captions";
 import { useStudio } from "../lib/useStudio";
 import { BootGate } from "../ui/BootGate";
 import { Button } from "../ui/Button";
@@ -43,6 +45,15 @@ export default function StudioApp() {
   const toolsMenu = useMenuPoint();
   const preparing = Boolean(studio.prepare?.active);
   const showTools = studio.nav === "home" || studio.nav === "jobs";
+  const canExportVideo =
+    studio.productMode === "video" &&
+    Boolean(studio.script && studio.script.segments.length > 0) &&
+    !studio.locked &&
+    !preparing;
+  const [burnOpen, setBurnOpen] = useState(false);
+  const [burnFormat, setBurnFormat] = useState<BurnFormat>("mp4");
+  const [burnResolution, setBurnResolution] = useState<BurnResolution>("1080");
+  const [burnFit, setBurnFit] = useState<BurnFit>("source");
   const pair = studio.needsTranslation
     ? `${langShort(studio.spokenLang, uiLang)} → ${langShort(studio.outputLang, uiLang)}`
     : langShort(studio.spokenLang, uiLang);
@@ -69,6 +80,15 @@ export default function StudioApp() {
       label: tr("cmdStart"),
       hint: tr("cmdStartHint"),
       run: () => void studio.runPipeline(),
+    },
+    {
+      id: "exportVideo",
+      label: tr("cmdExportVideo"),
+      run: () => {
+        if (canExportVideo) {
+          setBurnOpen(true);
+        }
+      },
     },
     {
       id: "output",
@@ -246,7 +266,9 @@ export default function StudioApp() {
                 ? `${tr("setupDownloading")} · ${Math.round(studio.prepare?.percent ?? 0)}%`
                 : studio.working
                   ? `${phaseLabel(studio.phase, uiLang)} · ${Math.round(studio.progress)}%`
-                  : tr("tagline")}
+                  : studio.productMode === "video"
+                    ? tr("taglineVideo")
+                    : tr("tagline")}
             </p>
           </div>
           {showTools ? (
@@ -260,6 +282,15 @@ export default function StudioApp() {
                 toolsMenu.onContextMenu(event);
               }}
             >
+              <SegmentedControl
+                value={studio.productMode}
+                disabled={studio.working || preparing}
+                options={[
+                  { id: "srt", label: tr("productSrt") },
+                  { id: "video", label: tr("productVideo") },
+                ]}
+                onChange={studio.setProductMode}
+              />
               <div className="lang-pair">
                 <Select
                   compact
@@ -351,6 +382,15 @@ export default function StudioApp() {
             <Button variant="ghost" className="cmd-hint" onClick={() => studio.setCommandOpen(true)}>
               Ctrl+K
             </Button>
+            {showTools && studio.productMode === "video" ? (
+              <Button
+                variant="subtle"
+                disabled={!canExportVideo}
+                onClick={() => setBurnOpen(true)}
+              >
+                {tr("exportVideo")}
+              </Button>
+            ) : null}
             {showTools ? (
               <Button
                 variant="primary"
@@ -479,6 +519,71 @@ export default function StudioApp() {
           studio.setPendingQuality(null);
         }}
       />
+      <Dialog
+        open={burnOpen}
+        title={tr("burnTitle")}
+        body={tr("burnBody")}
+        confirmLabel={tr("burnStart")}
+        onClose={() => setBurnOpen(false)}
+        onConfirm={() => {
+          setBurnOpen(false);
+          void studio.runBurn(burnFormat, burnResolution, burnFit);
+        }}
+      >
+        <div className="burn-fields">
+          <label>
+            <span>{tr("burnFormat")}</span>
+            <Select
+              value={burnFormat}
+              label={tr("burnFormat")}
+              options={BURN_FORMATS.map((id) => ({
+                id,
+                label:
+                  id === "mp4" ? tr("burnFormatMp4") : id === "mov" ? tr("burnFormatMov") : tr("burnFormatWebm"),
+              }))}
+              onChange={(id) => setBurnFormat(id as BurnFormat)}
+            />
+          </label>
+          <label>
+            <span>{tr("burnFit")}</span>
+            <Select
+              value={burnFit}
+              label={tr("burnFit")}
+              options={BURN_FITS.map((id) => ({
+                id,
+                label:
+                  id === "landscape"
+                    ? tr("burnFitLandscape")
+                    : id === "portrait"
+                      ? tr("burnFitPortrait")
+                      : id === "square"
+                        ? tr("burnFitSquare")
+                        : tr("burnFitSource"),
+              }))}
+              onChange={(id) => setBurnFit(id as BurnFit)}
+            />
+          </label>
+          <label>
+            <span>{tr("burnResolution")}</span>
+            <Select
+              value={burnResolution}
+              label={tr("burnResolution")}
+              options={BURN_RESOLUTIONS.map((id) => ({
+                id,
+                label:
+                  id === "source"
+                    ? tr("burnResSource")
+                    : id === "1080"
+                      ? tr("burnRes1080")
+                      : id === "1440"
+                        ? tr("burnRes1440")
+                        : tr("burnRes4k"),
+              }))}
+              onChange={(id) => setBurnResolution(id as BurnResolution)}
+            />
+          </label>
+        </div>
+      </Dialog>
     </div>
   );
 }

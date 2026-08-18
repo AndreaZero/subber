@@ -1,7 +1,9 @@
 mod asr;
 mod bootstrap;
+mod burn;
 mod export;
 mod ffmpeg;
+mod fonts;
 mod open;
 mod prepare;
 mod project;
@@ -402,6 +404,44 @@ async fn prepare_models(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+async fn burn_video(
+    app: AppHandle,
+    items: Vec<burn::BurnJob>,
+    format: String,
+    resolution: String,
+    fit: Option<String>,
+    output_dir: String,
+) -> Result<burn::BurnBatchResult, String> {
+    let fit = fit.unwrap_or_else(|| "source".into());
+    tauri::async_runtime::spawn_blocking(move || {
+        burn::burn_batch(&app, &items, &format, &resolution, &fit, &output_dir)
+    })
+    .await
+    .map_err(|err| format!("Export video interrotto: {err}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn probe_video(video_path: String) -> Result<ffmpeg::VideoSize, String> {
+    tauri::async_runtime::spawn_blocking(move || ffmpeg::probe_video_size(&video_path))
+        .await
+        .map_err(|err| format!("Lettura video interrotta: {err}"))?
+}
+
+#[tauri::command]
+async fn list_fonts() -> fonts::FontList {
+    tauri::async_runtime::spawn_blocking(fonts::list_fonts)
+        .await
+        .unwrap_or(fonts::FontList { fonts: Vec::new() })
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn inspect_font(path: String) -> Result<fonts::FontItem, String> {
+    tauri::async_runtime::spawn_blocking(move || fonts::inspect_font(path))
+        .await
+        .map_err(|err| format!("Lettura font interrotta: {err}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
 async fn save_script(
     app: AppHandle,
     items: Vec<export::SaveScriptJob>,
@@ -430,6 +470,10 @@ pub fn run() {
             export_source,
             export_output,
             translate_segments,
+            burn_video,
+            probe_video,
+            list_fonts,
+            inspect_font,
             save_script
         ])
         .run(tauri::generate_context!())

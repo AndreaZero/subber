@@ -18,6 +18,10 @@ import type {
   PrepareResult,
   SaveScriptResult,
   OpenResult,
+  BurnBatchResult,
+  BurnJob,
+  FontItem,
+  VideoSize,
 } from "./files";
 import { parseProjectFile, type ProjectFile } from "./projects";
 
@@ -143,6 +147,35 @@ export async function translateSegments(
   });
 }
 
+export async function burnVideo(
+  items: BurnJob[],
+  format: string,
+  resolution: string,
+  outputDir: string,
+  fit = "source",
+): Promise<BurnBatchResult> {
+  return invoke<BurnBatchResult>("burn_video", {
+    items,
+    format,
+    resolution,
+    fit,
+    outputDir,
+  });
+}
+
+export async function probeVideo(videoPath: string): Promise<VideoSize> {
+  return invoke<VideoSize>("probe_video", { videoPath });
+}
+
+export async function listFonts(): Promise<FontItem[]> {
+  const result = await invoke<{ fonts: FontItem[] }>("list_fonts");
+  return result.fonts ?? [];
+}
+
+export async function inspectFont(path: string): Promise<FontItem> {
+  return invoke<FontItem>("inspect_font", { path });
+}
+
 export async function pickVideoFiles(): Promise<string[]> {
   const selected = await open({
     multiple: true,
@@ -151,6 +184,19 @@ export async function pickVideoFiles(): Promise<string[]> {
     filters: [VIDEO_FILTER],
   });
   return asPathList(selected);
+}
+
+export async function pickFontFile(): Promise<string | null> {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    title: "Scegli un font",
+    filters: [{ name: "Font", extensions: ["ttf", "otf", "ttc", "otc"] }],
+  });
+  if (selected === null) {
+    return null;
+  }
+  return Array.isArray(selected) ? selected[0] ?? null : selected;
 }
 
 export async function pickOutputDir(title = "Cartella di output"): Promise<string | null> {

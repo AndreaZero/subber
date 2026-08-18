@@ -11,7 +11,7 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-const MISSING_FFMPEG: &str = "FFmpeg non è installato o non è nel PATH. Installalo, riapri l’app, oppure imposta la variabile FFMPEG_PATH con il percorso di ffmpeg.exe.";
+pub(crate) const MISSING_FFMPEG: &str = "FFmpeg non è installato o non è nel PATH. Installalo, riapri l’app, oppure imposta la variabile FFMPEG_PATH con il percorso di ffmpeg.exe.";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +39,7 @@ pub struct ExtractBatchResult {
     pub items: Vec<ExtractItem>,
 }
 
-fn ffmpeg_command(bin: &Path) -> Command {
+pub(crate) fn ffmpeg_command(bin: &Path) -> Command {
     let mut cmd = Command::new(bin);
     #[cfg(windows)]
     {
@@ -115,7 +115,7 @@ pub fn resolve_ffmpeg() -> Result<PathBuf, String> {
     Err(MISSING_FFMPEG.into())
 }
 
-fn parse_hms(token: &str) -> Option<f64> {
+pub(crate) fn parse_hms(token: &str) -> Option<f64> {
     let token = token.trim();
     if token.is_empty() || token.eq_ignore_ascii_case("n/a") {
         return None;
@@ -135,7 +135,99 @@ fn parse_duration(stderr: &str) -> Option<f64> {
     parse_hms(token)
 }
 
-fn probe_duration(ffmpeg: &Path, video: &Path) -> Option<f64> {
+pub(crate) fn parse_rotation(stderr: &str) -> f64 {
+    if let Some(index) = stderr.find("rotation of ") {
+        let rest = &stderr[index + "rotation of ".len()..];
+        if let Some(token) = rest.split("degree").next() {
+            if let Ok(value) = token.trim().parse::<f64>() {
+                return value;
+            }
+        }
+    }
+    for line in stderr.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("rotate") {
+            if let Some((_, raw)) = trimmed.split_once(':') {
+                if let Ok(value) = raw.trim().parse::<f64>() {
+                    return value;
+                }
+            }
+        }
+    }
+    0.0
+}
+
+fn parse_coded_size(stderr: &str) -> Option<(u32, u32)> {
+    let line = stderr.lines().find(|row| row.contains("Video:"))?;
+    let bytes = line.as_bytes();
+    let mut i = 0usize;
+    while i + 3 < bytes.len() {
+        if bytes[i].is_ascii_digit() {
+            let start = i;
+            while i < bytes.len() && bytes[i].is_ascii_digit() {
+                i += 1;
+            }
+            if i < bytes.len() && bytes[i] == b'x' {
+                let width: u32 = line.get(start..i)?.parse().ok()?;
+                i += 1;
+                let h_start = i;
+                while i < bytes.len() && bytes[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let height: u32 = line.get(h_start..i)?.parse().ok()?;
+                if width >= 16 && height >= 16 {
+                    return Some((width, height));
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    None
+}
+
+fn display_size(coded: (u32, u32), rotation: f64) -> (u32, u32) {
+    let abs = rotation.abs() % 360.0;
+    if (abs - 90.0).abs() < 1.0 || (abs - 270.0).abs() < 1.0 {
+        (coded.1, coded.0)
+    } else {
+        coded
+    }
+}
+
+pub(crate) fn probe_display_size(ffmpeg_bin: &Path, video: &Path) -> Result<(u32, u32), String> {
+    let output = ffmpeg_command(ffmpeg_bin)
+        .args(["-hide_banner", "-i"])
+        .arg(video)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|_| MISSING_FFMPEG.to_string())?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let coded =
+        parse_coded_size(&stderr).ok_or_else(|| "Impossibile leggere la risoluzione del video.".to_string())?;
+    Ok(display_size(coded, parse_rotation(&stderr)))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+pub fn probe_video_size(video_path: &str) -> Result<VideoSize, String> {
+    let video = PathBuf::from(video_path);
+    if !video.is_file() {
+        return Err("Video non trovato.".into());
+    }
+    let ffmpeg_bin = resolve_ffmpeg()?;
+    let (width, height) = probe_display_size(&ffmpeg_bin, &video)?;
+    Ok(VideoSize { width, height })
+}
+
+pub(crate) fn probe_duration(ffmpeg: &Path, video: &Path) -> Option<f64> {
     let output = ffmpeg_command(ffmpeg)
         .args(["-hide_banner", "-i"])
         .arg(video)
@@ -146,7 +238,7 @@ fn probe_duration(ffmpeg: &Path, video: &Path) -> Option<f64> {
     parse_duration(&String::from_utf8_lossy(&output.stderr))
 }
 
-fn safe_stem(path: &Path) -> String {
+pub(crate) fn safe_stem(path: &Path) -> String {
     let raw = path
         .file_stem()
         .and_then(|name| name.to_str())
