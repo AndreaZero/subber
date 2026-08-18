@@ -32,6 +32,7 @@ type Props = {
   engine: EngineStatus | null;
   prepare: PrepareState | null;
   onDownloadModels: (parts?: PreparePart) => void;
+  needsTranslation?: boolean;
 };
 
 export function SettingsView({
@@ -58,6 +59,7 @@ export function SettingsView({
   engine,
   prepare,
   onDownloadModels,
+  needsTranslation = true,
 }: Props) {
   return (
     <div>
@@ -75,6 +77,7 @@ export function SettingsView({
         locked={working}
         tr={tr}
         onDownload={onDownloadModels}
+        needsTranslation={needsTranslation}
       />
 
       <div className="settings-grid">

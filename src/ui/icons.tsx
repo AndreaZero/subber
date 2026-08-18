@@ -100,3 +100,86 @@ export function IconCheck() {
     </Svg>
   );
 }
+
+export function IconPlay() {
+  return (
+    <Svg>
+      <path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconPause() {
+  return (
+    <Svg>
+      <rect x="7" y="5" width="3.5" height="14" rx="0.8" fill="currentColor" stroke="none" />
+      <rect x="13.5" y="5" width="3.5" height="14" rx="0.8" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconFullscreen() {
+  return (
+    <Svg>
+      <path d="M8 4H4v4" />
+      <path d="M16 4h4v4" />
+      <path d="M8 20H4v-4" />
+      <path d="M16 20h4v-4" />
+    </Svg>
+  );
+}
+
+export function IconFullscreenExit() {
+  return (
+    <Svg>
+      <path d="M8 4v4H4" />
+      <path d="M16 4v4h4" />
+      <path d="M8 20v-4H4" />
+      <path d="M16 20v-4h4" />
+    </Svg>
+  );
+}
+
+export function IconPlus() {
+  return (
+    <Svg>
+      <path d="M12 5v14M5 12h14" />
+    </Svg>
+  );
+}
+
+export function IconFolder() {
+  return (
+    <Svg>
+      <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6H9l2 2h7.5A1.5 1.5 0 0 1 20 9.5v8A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+    </Svg>
+  );
+}
+
+export function IconResolve() {
+  return (
+    <Svg>
+      <rect x="4" y="6" width="16" height="12" rx="2" />
+      <path d="m10 9 6 3-6 3z" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconMute() {
+  return (
+    <Svg>
+      <path d="M4 10v4h3l4 3V7L7 10z" />
+      <path d="m16 10 4 4M20 10l-4 4" />
+    </Svg>
+  );
+}
+
+export function IconVolume() {
+  return (
+    <Svg>
+      <path d="M4 10v4h3l4 3V7L7 10z" />
+      <path d="M16 9.5a3.2 3.2 0 0 1 0 5" />
+      <path d="M18.2 7.5a6 6 0 0 1 0 9" />
+    </Svg>
+  );
+}

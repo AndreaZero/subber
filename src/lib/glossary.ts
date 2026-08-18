@@ -1,9 +1,5 @@
 export const DEFAULT_TERMS = [
-  "Caravaggio",
-  "Michelangelo Merisi",
-  "Cappella Contarelli",
-  "San Luigi dei Francesi",
-  "Otoniell",
+
 ];
 
 export type GlossaryPreset = {

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { memo } from "react";
 import type { ListedVideo } from "../lib/files";
 import { formatBytes, formatMediaDuration } from "../lib/files";
 import type { Msg, UiLang } from "../lib/i18n";
+import { mediaSrc } from "../lib/media";
 import {
   friendlyError,
   hashHue,
@@ -13,7 +14,7 @@ import {
 import { Button } from "./Button";
 import { IconButton } from "./IconButton";
 import { IconMore, IconStop } from "./icons";
-import { Popover } from "./Popover";
+import { menuPointFromElement, Popover, useMenuPoint } from "./Popover";
 import { Progress } from "./Progress";
 import { StatusPill } from "./StatusPill";
 import { Waveform } from "./Waveform";
@@ -25,6 +26,8 @@ type Props = {
   selected: boolean;
   locked: boolean;
   working: boolean;
+  dense?: boolean;
+  showTranslation: boolean;
   uiLang: UiLang;
   tr: Tr;
   onSelect: () => void;
@@ -32,13 +35,17 @@ type Props = {
   onRetry: () => void;
   onCancel: () => void;
   onCopy: (path: string, label: string) => void;
+  onOpenFolder: (path: string) => void;
+  onImportDavinci: () => void;
 };
 
-export function JobCard({
+function JobCardView({
   video,
   selected,
   locked,
   working,
+  dense,
+  showTranslation,
   uiLang,
   tr,
   onSelect,
@@ -46,27 +53,35 @@ export function JobCard({
   onRetry,
   onCancel,
   onCopy,
+  onOpenFolder,
+  onImportDavinci,
 }: Props) {
-  const [menu, setMenu] = useState(false);
-  const stages = jobStages(video, uiLang);
+  const menu = useMenuPoint();
+  const stages = jobStages(video, uiLang, showTranslation);
   const hue = hashHue(video.name);
   const percent = Math.round(video.percent ?? (video.status === "translated" ? 100 : 0));
   const error = video.status === "error" && video.error ? friendlyError(video.error, uiLang) : null;
   const live = video.status === "transcribing";
-  const translating = video.status === "translating";
+  const translating = showTranslation && video.status === "translating";
   const done = video.status === "translated";
   const frames = video.frames ?? [];
+  const busy =
+    video.status === "extracting" ||
+    video.status === "transcribing" ||
+    video.status === "translating" ||
+    video.status === "exporting";
 
   return (
     <article
-      className={`job-card ${selected ? "is-selected" : ""} ${video.status === "error" ? "is-failed" : ""} ${done ? "is-done" : ""}`}
+      className={`job-card ${dense ? "is-dense" : ""} ${selected ? "is-selected" : ""} ${video.status === "error" ? "is-failed" : ""} ${done ? "is-done" : ""}`}
       onClick={onSelect}
+      onContextMenu={menu.onContextMenu}
     >
       <div className="thumb" aria-hidden="true">
         {frames.length > 0 ? (
           <div className={`thumb-frames is-${Math.min(frames.length, 3)}`}>
             {frames.slice(0, 3).map((frame, index) => (
-              <img key={index} src={frame} alt="" />
+              <img key={index} src={mediaSrc(frame)} alt="" />
             ))}
           </div>
         ) : (
@@ -91,7 +106,7 @@ export function JobCard({
 
         {video.status !== "queued" && video.status !== "error" ? (
           <div className="job-progress">
-            <Progress value={percent} mint={translating} />
+            <Progress value={percent} mint={translating} busy={busy && percent < 100} />
             <strong>{percent}%</strong>
           </div>
         ) : null}
@@ -139,18 +154,18 @@ export function JobCard({
                 variant="ghost"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCopy(video.folderPath!, tr("copyFolder"));
+                  onOpenFolder(video.folderPath!);
                 }}
               >
                 {tr("openFolder")}
               </Button>
             ) : null}
-            {video.srtPath ? (
+            {video.outputSrtPath || video.srtPath ? (
               <Button
                 variant="ghost"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onCopy(video.srtPath!, tr("copySrt"));
+                  onImportDavinci();
                 }}
               >
                 {tr("importDavinci")}
@@ -204,30 +219,68 @@ export function JobCard({
           label={tr("actions")}
           onClick={(event) => {
             event.stopPropagation();
-            setMenu((open) => !open);
+            if (menu.point) {
+              menu.close();
+            } else {
+              menu.openAt(menuPointFromElement(event.currentTarget));
+            }
           }}
         >
           <IconMore />
         </IconButton>
-        <Popover open={menu} onClose={() => setMenu(false)}>
+        <Popover open={menu.point != null} x={menu.point?.x} y={menu.point?.y} onClose={menu.close}>
           <button
             type="button"
             onClick={() => {
               onCopy(video.path, tr("copyPath"));
-              setMenu(false);
+              menu.close();
             }}
           >
             {tr("copyPath")}
           </button>
+          {video.folderPath ? (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenFolder(video.folderPath!);
+                menu.close();
+              }}
+            >
+              {tr("openFolder")}
+            </button>
+          ) : null}
           {video.srtPath ? (
             <button
               type="button"
               onClick={() => {
                 onCopy(video.srtPath!, tr("copySrt"));
-                setMenu(false);
+                menu.close();
               }}
             >
               {tr("copySrt")}
+            </button>
+          ) : null}
+          {video.outputSrtPath || video.srtPath ? (
+            <button
+              type="button"
+              onClick={() => {
+                onImportDavinci();
+                menu.close();
+              }}
+            >
+              {tr("importDavinci")}
+            </button>
+          ) : null}
+          {video.status === "error" ? (
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => {
+                onRetry();
+                menu.close();
+              }}
+            >
+              {tr("retry")}
             </button>
           ) : null}
           <button
@@ -235,7 +288,7 @@ export function JobCard({
             className="is-danger"
             disabled={locked}
             onClick={() => {
-              setMenu(false);
+              menu.close();
               onRemove();
             }}
           >
@@ -246,3 +299,15 @@ export function JobCard({
     </article>
   );
 }
+
+export const JobCard = memo(JobCardView, (prev, next) => {
+  return (
+    prev.video === next.video &&
+    prev.selected === next.selected &&
+    prev.locked === next.locked &&
+    prev.working === next.working &&
+    prev.dense === next.dense &&
+    prev.showTranslation === next.showTranslation &&
+    prev.uiLang === next.uiLang
+  );
+});

@@ -2,6 +2,7 @@ mod asr;
 mod bootstrap;
 mod export;
 mod ffmpeg;
+mod open;
 mod prepare;
 mod python;
 mod translate;
@@ -220,10 +221,35 @@ fn read_script(path: String) -> Result<ScriptFile, String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-async fn preview_videos(video_paths: Vec<String>) -> Vec<ffmpeg::VideoPreview> {
-    tauri::async_runtime::spawn_blocking(move || ffmpeg::preview_videos(&video_paths))
+async fn preview_videos(app: AppHandle, video_paths: Vec<String>) -> Vec<ffmpeg::VideoPreview> {
+    tauri::async_runtime::spawn_blocking(move || ffmpeg::preview_videos(&app, &video_paths))
         .await
         .unwrap_or_default()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn open_path(path: String) -> Result<open::OpenResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        open::reveal_path(&path)?;
+        Ok(open::OpenResult {
+            ok: true,
+            revealed: true,
+            message: None,
+        })
+    })
+    .await
+    .map_err(|err| format!("Apertura interrotta: {err}"))?
+}
+
+#[tauri::command(rename_all = "camelCase")]
+async fn import_davinci(
+    app: AppHandle,
+    srt_path: String,
+    video_path: Option<String>,
+) -> Result<open::OpenResult, String> {
+    tauri::async_runtime::spawn_blocking(move || open::import_davinci(&app, srt_path, video_path))
+        .await
+        .map_err(|err| format!("Import DaVinci interrotto: {err}"))?
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -391,6 +417,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             inspect_videos,
             preview_videos,
+            open_path,
+            import_davinci,
             read_script,
             engine_status,
             prepare_models,

@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -91,6 +92,7 @@ class EmitTqdm(TqdmBase):
         kwargs.setdefault("mininterval", 0.4)
         super().__init__(*args, **kwargs)
         self._last_pct = -1
+        self._last_emit = 0.0
         self._report()
 
     def update(self, n=1):
@@ -101,19 +103,32 @@ class EmitTqdm(TqdmBase):
     def _report(self) -> None:
         total = float(getattr(self, "total", 0) or 0)
         current = float(getattr(self, "n", 0) or 0)
-        inner = (current / total * 100.0) if total > 0 else 0.0
+        if total > 0:
+            inner = current / total * 100.0
+        else:
+            inner = min(88.0, 6.0 + current / (6 * 1024 * 1024) * 10.0)
         pct = int(inner)
-        if pct == getattr(self, "_last_pct", -1):
+        now = time.monotonic()
+        last_emit = float(getattr(self, "_last_emit", 0.0) or 0.0)
+        if pct == getattr(self, "_last_pct", -1) and now - last_emit < 0.9:
             return
         self._last_pct = pct
+        self._last_emit = now
         lo, hi = PART_WEIGHT
         overall = lo + (hi - lo) * min(1.0, max(0.0, inner / 100.0))
         desc = getattr(self, "desc", None) or PART_LABEL
+        if current >= 1024 * 1024:
+            size = f"{current / (1024 * 1024):.0f} MB"
+            if total >= 1024 * 1024:
+                size = f"{current / (1024 * 1024):.0f}/{total / (1024 * 1024):.0f} MB"
+            message = f"{str(desc).strip() or PART_LABEL} · {size}"
+        else:
+            message = str(desc).strip() or PART_LABEL
         emit(
             {
                 "status": "downloading",
                 "part": PART,
-                "message": str(desc).strip() or PART_LABEL,
+                "message": message,
                 "percent": round(overall, 1),
             }
         )
@@ -274,6 +289,10 @@ def download(quality: str, parts: str) -> dict:
             download_translate()
 
     payload = result(quality, whisper_ready(quality), translate_ready())
+    if parts == "whisper":
+        payload["modelsReady"] = bool(payload.get("whisperReady"))
+    elif parts == "translate":
+        payload["modelsReady"] = bool(payload.get("translateReady"))
     emit(
         {
             "status": "done",

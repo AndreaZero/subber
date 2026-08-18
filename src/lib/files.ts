@@ -56,6 +56,7 @@ export type ListedVideo = VideoFile & {
   percent?: number;
   message?: string;
   frames?: string[];
+  skipTranslation?: boolean;
   addedAt: number;
 };
 
@@ -216,6 +217,12 @@ export type EngineStatus = {
   whisperModel: string | null;
 };
 
+export type OpenResult = {
+  ok: boolean;
+  revealed: boolean;
+  message: string | null;
+};
+
 export type PreparePart = "all" | "whisper" | "translate";
 
 export type PrepareProgress = {
@@ -246,11 +253,7 @@ export type SaveScriptResult = {
 };
 
 export const DEFAULT_GLOSSARY = [
-  "Caravaggio",
-  "Michelangelo Merisi",
-  "Cappella Contarelli",
-  "San Luigi dei Francesi",
-  "Otoniell",
+
 ].join("\n");
 
 export function mergeVideos(
@@ -293,6 +296,7 @@ export function attachListing(
       percent: old.percent,
       message: old.message,
       frames: old.frames,
+      skipTranslation: old.skipTranslation,
       addedAt: old.addedAt ?? Date.now(),
     };
   });
@@ -333,9 +337,11 @@ export function statusLabel(video: ListedVideo): string {
         ? `Traduzione ${Math.round(video.percent)}%`
         : "Traduzione";
     case "translated":
-      return video.outputCode
-        ? `Traduzione pronta (${video.spokenCode || "?"}→${video.outputCode})`
-        : "Traduzione pronta";
+      return video.skipTranslation
+        ? "File pronti"
+        : video.outputCode
+          ? `Traduzione pronta (${video.spokenCode || "?"}→${video.outputCode})`
+          : "Traduzione pronta";
     case "error":
       return video.error ? `Errore: ${video.error}` : "Errore";
   }

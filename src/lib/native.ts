@@ -17,6 +17,7 @@ import type {
   PreparePart,
   PrepareResult,
   SaveScriptResult,
+  OpenResult,
 } from "./files";
 
 const VIDEO_FILTER = {
@@ -43,6 +44,17 @@ export async function previewVideos(videoPaths: string[]): Promise<VideoPreview[
     return [];
   }
   return invoke<VideoPreview[]>("preview_videos", { videoPaths });
+}
+
+export async function openPath(path: string): Promise<OpenResult> {
+  return invoke<OpenResult>("open_path", { path });
+}
+
+export async function importDavinci(
+  srtPath: string,
+  videoPath?: string,
+): Promise<OpenResult> {
+  return invoke<OpenResult>("import_davinci", { srtPath, videoPath });
 }
 
 export async function readScript(path: string): Promise<ScriptFile> {
@@ -122,7 +134,7 @@ export async function pickVideoFiles(): Promise<string[]> {
   const selected = await open({
     multiple: true,
     directory: false,
-    title: "Scegli i video delle interviste",
+    title: "Scegli i video",
     filters: [VIDEO_FILTER],
   });
   return asPathList(selected);

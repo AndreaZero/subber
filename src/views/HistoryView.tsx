@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { type HistoryEntry } from "../lib/history";
 import type { Msg, UiLang } from "../lib/i18n";
 import { langShort } from "../lib/pipeline";
 import { Button } from "../ui/Button";
+import { Popover } from "../ui/Popover";
 import { StatusPill } from "../ui/StatusPill";
 
 type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
@@ -11,9 +13,12 @@ type Props = {
   uiLang: UiLang;
   tr: Tr;
   onClear: () => void;
+  onCopy?: (text: string, title: string) => void;
 };
 
-export function HistoryView({ entries, uiLang, tr, onClear }: Props) {
+export function HistoryView({ entries, uiLang, tr, onClear, onCopy }: Props) {
+  const [menu, setMenu] = useState<{ x: number; y: number; entry: HistoryEntry } | null>(null);
+
   return (
     <div>
       <div className="page-head">
@@ -31,7 +36,14 @@ export function HistoryView({ entries, uiLang, tr, onClear }: Props) {
             </Button>
           </div>
           {entries.map((entry) => (
-            <div key={entry.id} className="history-item">
+            <div
+              key={entry.id}
+              className="history-item"
+              onContextMenu={(event) => {
+                event.preventDefault();
+                setMenu({ x: event.clientX, y: event.clientY, entry });
+              }}
+            >
               <div>
                 <strong>{entry.name}</strong>
                 <div className="muted">
@@ -49,6 +61,31 @@ export function HistoryView({ entries, uiLang, tr, onClear }: Props) {
           ))}
         </>
       )}
+      <Popover open={menu != null} x={menu?.x} y={menu?.y} onClose={() => setMenu(null)}>
+        {menu ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                onCopy?.(menu.entry.name, tr("toastCopied"));
+                setMenu(null);
+              }}
+            >
+              {tr("copyName")}
+            </button>
+            <button
+              type="button"
+              className="is-danger"
+              onClick={() => {
+                setMenu(null);
+                onClear();
+              }}
+            >
+              {tr("clearHistory")}
+            </button>
+          </>
+        ) : null}
+      </Popover>
     </div>
   );
 }

@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Sottotitoli — Caravaggio",
+        "title": "Video Sub",
         "width": 1440,
         "height": 900,
         "minWidth": 900,
@@ -20,7 +20,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**", "$RESOURCE/**", "$HOME/**", "$DOCUMENT/**", "$DOWNLOAD/**", "$DESKTOP/**", "**"]
+      }
     }
   },
   "bundle": {
@@ -44,6 +48,7 @@
       "../worker/save_script.py",
       "../worker/models.py",
       "../worker/prepare.py",
+      "../worker/import_resolve.py",
       "../worker/requirements.txt"
     ]
   }

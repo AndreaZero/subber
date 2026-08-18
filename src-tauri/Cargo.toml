@@ -1,7 +1,7 @@
 [package]
 name = "video-sub"
 version = "0.1.0"
-description = "Sottotitoli da interviste francesi per documentario Caravaggio"
+description = "Trascrizione locale, traduzione e sottotitoli SRT da qualsiasi video"
 authors = ["you"]
 edition = "2021"
 
@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -2,14 +2,14 @@ import type { UiLang } from "./i18n";
 
 export type LangCode = string;
 
-export const DEFAULT_SPOKEN_LANG = "fr";
+export const DEFAULT_SPOKEN_LANG = "auto";
 export const DEFAULT_OUTPUT_LANG = "it";
 
-/** Lingue Whisper. Francese primo: è il default del documentario Caravaggio. */
+/** Lingue Whisper. Default UI: rilevamento automatico. */
 export const SPOKEN_LANGUAGES: { id: LangCode; label: string }[] = [
-  { id: "fr", label: "Francese" },
   { id: "auto", label: "Rileva automaticamente" },
   { id: "it", label: "Italiano" },
+  { id: "fr", label: "Francese" },
   { id: "en", label: "Inglese" },
   { id: "es", label: "Spagnolo" },
   { id: "de", label: "Tedesco" },

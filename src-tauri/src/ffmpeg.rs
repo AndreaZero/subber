@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -355,7 +355,7 @@ pub fn extract_audio_batch(
     output_dir: &str,
 ) -> Result<ExtractBatchResult, String> {
     if video_paths.is_empty() {
-        return Err("Aggiungi almeno un video dell’intervista.".into());
+        return Err("Aggiungi almeno un video.".into());
     }
 
     let output_dir = output_dir.trim();
@@ -441,6 +441,23 @@ pub struct VideoPreview {
     pub duration_secs: Option<f64>,
 }
 
+fn preview_cache(app: &AppHandle) -> Option<PathBuf> {
+    app.path().app_data_dir().ok().map(|dir| dir.join("previews"))
+}
+
+fn preview_key(path: &Path) -> String {
+    let stem = safe_stem(path);
+    let mut hash: u64 = 5381;
+    for byte in path.to_string_lossy().bytes() {
+        hash = hash.wrapping_mul(33).wrapping_add(u64::from(byte));
+    }
+    format!("{stem}-{hash:x}")
+}
+
+fn jpeg_ok(path: &Path) -> bool {
+    fs::metadata(path).map(|meta| meta.len() > 80).unwrap_or(false)
+}
+
 fn base64_encode(data: &[u8]) -> String {
     const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -467,43 +484,92 @@ fn base64_encode(data: &[u8]) -> String {
     out
 }
 
-fn grab_frame(ffmpeg: &Path, video: &Path, at: f64) -> Option<String> {
-    let at = at.max(0.08);
-    let output = ffmpeg_command(ffmpeg)
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-nostdin",
-            "-ss",
-            &format!("{at:.3}"),
-            "-i",
-        ])
-        .arg(video)
-        .args([
-            "-an",
-            "-frames:v",
-            "1",
-            "-vf",
-            "scale=480:-2",
-            "-q:v",
-            "5",
-            "-f",
-            "image2pipe",
-            "-vcodec",
-            "mjpeg",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !output.status.success() || output.stdout.len() < 64 {
+fn jpeg_data_url(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    if bytes.len() < 80 {
         return None;
     }
-    Some(format!(
-        "data:image/jpeg;base64,{}",
-        base64_encode(&output.stdout)
-    ))
+    Some(format!("data:image/jpeg;base64,{}", base64_encode(&bytes)))
+}
+
+fn grab_frame(ffmpeg: &Path, video: &Path, at: f64, dest: &Path) -> Option<String> {
+    if jpeg_ok(dest) {
+        if let Some(url) = jpeg_data_url(dest) {
+            return Some(url);
+        }
+    }
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).ok()?;
+    }
+    let at = at.max(0.08);
+    let stamp = format!("{at:.3}");
+    // scale=640:-2 alone hits swscaler -129 on files with prim/trc "reserved" (bt709).
+    let filters = [
+        "setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale=640:-2:flags=fast_bilinear,format=yuvj420p",
+        "scale=640:-2:in_range=tv:out_range=pc:flags=fast_bilinear,format=yuvj420p",
+        "format=yuvj420p",
+    ];
+
+    for filter in filters {
+        for seek_before in [true, false] {
+            let _ = fs::remove_file(dest);
+            let mut cmd = ffmpeg_command(ffmpeg);
+            cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y"]);
+            if seek_before {
+                cmd.args(["-ss", &stamp]);
+            }
+            cmd.arg("-i").arg(video);
+            if !seek_before {
+                cmd.args(["-ss", &stamp]);
+            }
+            cmd.args([
+                "-an",
+                "-sn",
+                "-dn",
+                "-map",
+                "0:v:0",
+                "-frames:v",
+                "1",
+                "-vf",
+                filter,
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-colorspace",
+                "bt709",
+                "-q:v",
+                "3",
+                "-update",
+                "1",
+            ])
+            .arg(dest)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok();
+            if jpeg_ok(dest) {
+                return jpeg_data_url(dest);
+            }
+        }
+    }
+
+    let _ = fs::remove_file(dest);
+    let mut cmd = ffmpeg_command(ffmpeg);
+    cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", &stamp])
+        .arg("-i")
+        .arg(video)
+        .args(["-an", "-frames:v", "1", "-q:v", "4", "-update", "1"])
+        .arg(dest)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .ok();
+    if jpeg_ok(dest) {
+        jpeg_data_url(dest)
+    } else {
+        None
+    }
 }
 
 fn preview_times(duration: Option<f64>) -> Vec<f64> {
@@ -517,8 +583,9 @@ fn preview_times(duration: Option<f64>) -> Vec<f64> {
     }
 }
 
-pub fn preview_videos(paths: &[String]) -> Vec<VideoPreview> {
+pub fn preview_videos(app: &AppHandle, paths: &[String]) -> Vec<VideoPreview> {
     let ffmpeg = resolve_ffmpeg().ok();
+    let cache = preview_cache(app);
     let mut items = Vec::new();
     for raw in paths {
         let video = PathBuf::from(raw);
@@ -541,8 +608,15 @@ pub fn preview_videos(paths: &[String]) -> Vec<VideoPreview> {
         }
         let duration_secs = probe_duration(bin, &video);
         let mut frames = Vec::new();
-        for at in preview_times(duration_secs) {
-            if let Some(frame) = grab_frame(bin, &video, at) {
+        let key = preview_key(&video);
+        for (index, at) in preview_times(duration_secs).into_iter().enumerate() {
+            let dest = cache
+                .as_ref()
+                .map(|dir| dir.join(format!("{key}-{index}.jpg")))
+                .unwrap_or_else(|| {
+                    std::env::temp_dir().join(format!("video-sub-{key}-{index}.jpg"))
+                });
+            if let Some(frame) = grab_frame(bin, &video, at, &dest) {
                 frames.push(frame);
             }
             if frames.len() >= 3 {

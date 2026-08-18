@@ -129,6 +129,7 @@
 
 .ui-progress {
   display: block;
+  position: relative;
   height: 6px;
   border-radius: var(--radius-full);
   background: var(--bg-5);
@@ -151,6 +152,21 @@
 .ui-progress.is-mint > span {
   background: linear-gradient(90deg, var(--accent-2), #b8f0e2);
   box-shadow: 0 0 12px rgba(126, 208, 188, 0.35);
+}
+
+.ui-progress.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  animation: ui-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.ui-progress.is-indeterminate > span {
+  width: 38%;
+  transform: none;
+  animation: ui-indet 1.35s ease-in-out infinite;
 }
 
 .ui-pill {
@@ -281,6 +297,12 @@
   background: #14141c;
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-2);
+}
+
+.ui-popover.is-fixed {
+  position: fixed;
+  z-index: 90;
+  margin: 0;
 }
 
 .ui-popover button {
@@ -543,9 +565,39 @@
   }
 }
 
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ui-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes ui-indet {
+  0% {
+    transform: translateX(-20%);
+  }
+  50% {
+    transform: translateX(180%);
+  }
+  100% {
+    transform: translateX(-20%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ui-wave i,
-  .ui-skel {
+  .ui-skel,
+  .ui-progress.is-busy::after,
+  .ui-progress.is-indeterminate > span,
+  .boot-spinner {
     animation: none;
   }
 }

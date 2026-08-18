@@ -1,19 +1,15 @@
 import {
   OUTPUT_LANGUAGES,
   SPOKEN_LANGUAGES,
-  formatClock,
-  formatMediaDuration,
   languageName,
 } from "../lib/files";
 import { saveHistory } from "../lib/history";
 import { langShort, phaseLabel, QUALITY_PRESETS, qualityLabel } from "../lib/pipeline";
 import { useStudio } from "../lib/useStudio";
-import { Badge } from "../ui/Badge";
 import { BootGate } from "../ui/BootGate";
 import { Button } from "../ui/Button";
 import { CommandPalette } from "../ui/CommandPalette";
 import { Dialog } from "../ui/Dialog";
-import { DropZone } from "../ui/DropZone";
 import {
   IconGlossary,
   IconHistory,
@@ -23,11 +19,9 @@ import {
   IconSidebar,
 } from "../ui/icons";
 import { IconButton } from "../ui/IconButton";
-import { JobCard } from "../ui/JobCard";
-import { Metric } from "../ui/Metric";
-import { Progress } from "../ui/Progress";
-import { ScriptPanel } from "../ui/ScriptPanel";
+import { Popover, useMenuPoint } from "../ui/Popover";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { StudioFloor } from "../ui/StudioFloor";
 import { ToastViewport } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { GlossaryView } from "../views/GlossaryView";
@@ -40,9 +34,12 @@ import "../styles/app.css";
 export default function StudioApp() {
   const studio = useStudio();
   const { tr, uiLang } = studio;
+  const toolsMenu = useMenuPoint();
   const preparing = Boolean(studio.prepare?.active);
   const showTools = studio.nav === "home" || studio.nav === "jobs";
-  const pair = `${langShort(studio.spokenLang, uiLang)} → ${langShort(studio.outputLang, uiLang)}`;
+  const pair = studio.needsTranslation
+    ? `${langShort(studio.spokenLang, uiLang)} → ${langShort(studio.outputLang, uiLang)}`
+    : langShort(studio.spokenLang, uiLang);
   const nav = [
     { id: "home" as const, label: tr("navHome"), icon: <IconHome /> },
     { id: "jobs" as const, label: tr("navJobs"), icon: <IconJobs /> },
@@ -73,7 +70,7 @@ export default function StudioApp() {
       hint: tr("cmdOutputHint"),
       run: () => {
         if (studio.outputDir) {
-          void studio.copyText(studio.outputDir, tr("copyFolder"));
+          void studio.openFolder(studio.outputDir);
         } else {
           void studio.onPickOutput();
         }
@@ -88,7 +85,7 @@ export default function StudioApp() {
       id: "prepare",
       label: tr("cmdPrepare"),
       hint: tr("cmdPrepareHint"),
-      run: () => void studio.downloadModels("all"),
+      run: () => void studio.downloadModels(studio.needsTranslation ? "all" : "whisper"),
     },
     { id: "settings", label: tr("navSettings"), run: () => studio.setNav("settings") },
     {
@@ -122,7 +119,7 @@ export default function StudioApp() {
           <img className="brand-mark" src="/icon.png" alt="" width={32} height={32} />
           <div>
             <b>Video Sub</b>
-            <span>Caravaggio</span>
+            <span>Sub editor</span>
           </div>
         </div>
         {nav.map((item) => (
@@ -186,7 +183,16 @@ export default function StudioApp() {
         </header>
 
         {showTools ? (
-          <div className="tools">
+          <div
+            className="tools"
+            onContextMenu={(event) => {
+              const target = event.target as HTMLElement;
+              if (target.closest("select, input, textarea")) {
+                return;
+              }
+              toolsMenu.onContextMenu(event);
+            }}
+          >
             <div className="lang-pair">
               <select
                 value={studio.spokenLang}
@@ -199,7 +205,7 @@ export default function StudioApp() {
                   </option>
                 ))}
               </select>
-              <em>→</em>
+              <em>{studio.needsTranslation ? "→" : "="}</em>
               <select
                 value={studio.outputLang}
                 disabled={studio.working || preparing}
@@ -211,6 +217,7 @@ export default function StudioApp() {
                   </option>
                 ))}
               </select>
+              {!studio.needsTranslation ? <span className="lang-same">{tr("sameLangNote")}</span> : null}
             </div>
             <SegmentedControl
               value={studio.quality}
@@ -221,10 +228,47 @@ export default function StudioApp() {
               }))}
               onChange={confirmQuality}
             />
+            <Popover open={toolsMenu.point != null} x={toolsMenu.point?.x} y={toolsMenu.point?.y} onClose={toolsMenu.close}>
+              {QUALITY_PRESETS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={studio.working || preparing}
+                  onClick={() => {
+                    confirmQuality(item.id);
+                    toolsMenu.close();
+                  }}
+                >
+                  {qualityLabel(item.id, uiLang)}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  toolsMenu.close();
+                  if (studio.outputDir) {
+                    void studio.openFolder(studio.outputDir);
+                  } else {
+                    void studio.onPickOutput();
+                  }
+                }}
+              >
+                {tr("cmdOutput")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  toolsMenu.close();
+                  studio.setNav("settings");
+                }}
+              >
+                {tr("navSettings")}
+              </button>
+            </Popover>
           </div>
         ) : null}
 
-        <main className="workspace">
+        <main className={`workspace ${showTools ? "is-studio" : ""}`}>
           <div className="workspace-inner">
             {studio.nav === "glossary" ? (
               <GlossaryView
@@ -241,6 +285,7 @@ export default function StudioApp() {
                 uiLang={uiLang}
                 tr={tr}
                 onClear={() => studio.setClearHistoryOpen(true)}
+                onCopy={(text, title) => void studio.copyText(text, title)}
               />
             ) : null}
 
@@ -269,147 +314,12 @@ export default function StudioApp() {
                 engine={studio.engine}
                 prepare={studio.prepare}
                 onDownloadModels={studio.downloadModels}
+                needsTranslation={studio.needsTranslation}
               />
             ) : null}
 
             {studio.nav === "home" || studio.nav === "jobs" ? (
-              <>
-                {studio.mode === "empty" && studio.nav === "home" ? (
-                  <div className="empty-home">
-                    <DropZone
-                      dragging={studio.dragging}
-                      disabled={studio.locked}
-                      title={tr("dropTitle")}
-                      choose={tr("dropChoose")}
-                      onPick={() => void studio.onPickFiles()}
-                    >
-                      <div className="drop-meta">
-                        <Badge tone="accent">{pair}</Badge>
-                        <Badge>{tr("localPrivate")}</Badge>
-                        <Badge>{tr("private")}</Badge>
-                      </div>
-                    </DropZone>
-                    {studio.adding ? (
-                      <div className="job-list" style={{ width: "min(100%, 640px)", marginTop: 8 }}>
-                        <div className="ui-skel" style={{ height: 88 }} />
-                        <div className="ui-skel" style={{ height: 88 }} />
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    <DropZone
-                      compact
-                      dragging={studio.dragging}
-                      disabled={studio.locked}
-                      title={tr("dropTitle")}
-                      choose={tr("dropMore")}
-                      onPick={() => void studio.onPickFiles()}
-                    />
-
-                    {studio.working || studio.mode === "processing" || studio.mode === "completed" ? (
-                      <div className="run-banner">
-                        <Metric
-                          label={tr("metricInterviews")}
-                          value={`${studio.doneCount} / ${studio.videos.length}`}
-                        />
-                        {studio.failCount > 0 ? (
-                          <Metric label={tr("metricFailed")} value={`${studio.failCount}`} />
-                        ) : null}
-                        <div className="run-banner-main">
-                          <Progress value={studio.progress} mint={studio.phase === "translate"} />
-                          <div className="stats">
-                            <Metric label={tr("metricElapsed")} value={formatClock(studio.elapsedSecs)} />
-                            {studio.processedSecs > 0 ? (
-                              <Metric
-                                label={tr("metricProcessed")}
-                                value={formatMediaDuration(studio.processedSecs)}
-                              />
-                            ) : null}
-                            <Metric label={tr("metricPhase")} value={phaseLabel(studio.phase, uiLang)} />
-                            <Metric
-                              label={tr("metricProgress")}
-                              value={`${Math.round(studio.progress)}%`}
-                            />
-                          </div>
-                        </div>
-                        <Button variant="ghost" disabled={!studio.working} onClick={studio.requestCancel}>
-                          {tr("stop")}
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {studio.adding ? (
-                      <div className="job-list">
-                        <div className="ui-skel" style={{ height: 132 }} />
-                      </div>
-                    ) : null}
-
-                    <div className="job-list">
-                      {studio.videos.map((video) => (
-                        <JobCard
-                          key={video.path}
-                          video={video}
-                          selected={studio.selectedPath === video.path}
-                          locked={studio.locked}
-                          working={studio.working}
-                          uiLang={uiLang}
-                          tr={tr}
-                          onSelect={() => studio.setSelectedPath(video.path)}
-                          onRemove={() => studio.setRemovePath(video.path)}
-                          onRetry={() => void studio.runPipeline([video])}
-                          onCancel={studio.requestCancel}
-                          onCopy={(path, title) => void studio.copyText(path, title)}
-                        />
-                      ))}
-                    </div>
-
-                    {studio.mode === "completed" ? (
-                      <div className="done-cta">
-                        <Button
-                          variant="primary"
-                          onClick={() => void studio.copyText(studio.outputDir, tr("copyFolder"))}
-                        >
-                          {tr("openFolder")}
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {studio.videos.length > 0 ? (
-                      <section className="editor-dock">
-                        <div className="editor-head">
-                          {studio.selected?.frames && studio.selected.frames.length > 0 ? (
-                            <div className="editor-frames">
-                              {studio.selected.frames.map((frame, index) => (
-                                <img key={index} src={frame} alt="" />
-                              ))}
-                            </div>
-                          ) : null}
-                          <div>
-                            <p className="kicker">{tr("editDockTitle")}</p>
-                            <h2>{studio.selected?.name ?? tr("editDockPick")}</h2>
-                            <p className="muted">
-                              {studio.selected?.parentDir ?? tr("editDockHint")}
-                            </p>
-                          </div>
-                        </div>
-                        {studio.selected ? (
-                          <ScriptPanel
-                            script={studio.script}
-                            loading={studio.scriptLoading}
-                            editable={!studio.working && Boolean(studio.script)}
-                            saving={studio.scriptSaving}
-                            tr={tr}
-                            onSave={(segments) => void studio.saveEdits(segments)}
-                          />
-                        ) : (
-                          <p className="muted">{tr("editDockHint")}</p>
-                        )}
-                      </section>
-                    ) : null}
-                  </>
-                )}
-              </>
+              <StudioFloor studio={studio} pair={pair} preparing={preparing} />
             ) : null}
           </div>
         </main>

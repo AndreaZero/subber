@@ -85,7 +85,14 @@ fn tar_bin() -> PathBuf {
     }
 }
 
-fn download_file(url: &str, dest: &Path) -> Result<(), String> {
+fn download_file(app: &AppHandle, url: &str, dest: &Path, from: f32, cap: f32) -> Result<(), String> {
+    let pulse = prepare::Pulse::start(app, "runtime", "Download in corso…", from, cap);
+    let result = download_file_inner(url, dest);
+    pulse.stop();
+    result
+}
+
+fn download_file_inner(url: &str, dest: &Path) -> Result<(), String> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -190,7 +197,7 @@ fn ensure_uv(app: &AppHandle, root: &Path) -> Result<PathBuf, String> {
     let archive = root.join(asset);
     let unpack = root.join("uv-unpack");
     let _ = fs::remove_dir_all(&unpack);
-    download_file(&url, &archive)?;
+    download_file(app, &url, &archive, 6.5, 9.5)?;
     emit(app, "runtime", "Installazione strumento Python", 10.0);
     extract_archive(&archive, &unpack, kind)?;
     let found = find_named(&unpack, uv_binary_name(), 0)
@@ -231,6 +238,13 @@ fn run_uv(
     percent: f32,
 ) -> Result<(), String> {
     emit(app, "runtime", message, percent);
+    let pulse = prepare::Pulse::start(
+        app,
+        "runtime",
+        &format!("{message}…"),
+        percent,
+        (percent + 5.5).min(23.0),
+    );
     let mut cmd = command(uv);
     cmd.args(args)
         .current_dir(root)
@@ -240,9 +254,13 @@ fn run_uv(
         cmd.env(key, value);
     }
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|err| format!("Impossibile avviare uv: {err}"))?;
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            pulse.stop();
+            return Err(format!("Impossibile avviare uv: {err}"));
+        }
+    };
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let out_thread = stdout.map(|pipe| {
@@ -272,6 +290,7 @@ fn run_uv(
     let status = child
         .wait()
         .map_err(|err| format!("uv interrotto: {err}"))?;
+    pulse.stop();
     let stdout_text = out_thread.and_then(|t| t.join().ok()).unwrap_or_default();
     let stderr_text = err_thread.and_then(|t| t.join().ok()).unwrap_or_default();
     if status.success() {
@@ -295,6 +314,13 @@ fn run_uv_install(
     end: f32,
 ) -> Result<(), String> {
     emit(app, "packages", "Installazione motori di trascrizione e traduzione", start);
+    let pulse = prepare::Pulse::start(
+        app,
+        "packages",
+        "Installazione motori in corso…",
+        start,
+        (end - 1.5).max(start + 1.0),
+    );
     let mut cmd = command(uv);
     cmd.args(args)
         .current_dir(root)
@@ -304,9 +330,16 @@ fn run_uv_install(
         cmd.env(key, value);
     }
 
-    let mut child = cmd
+    let mut child = match cmd
         .spawn()
-        .map_err(|err| format!("Impossibile avviare l’installazione pacchetti: {err}"))?;
+        .map_err(|err| format!("Impossibile avviare l’installazione pacchetti: {err}"))
+    {
+        Ok(child) => child,
+        Err(err) => {
+            pulse.stop();
+            return Err(err);
+        }
+    };
     let stderr = child.stderr.take();
     let stdout = child.stdout.take();
     let mut seen = 0u32;
@@ -343,6 +376,7 @@ fn run_uv_install(
     let status = child
         .wait()
         .map_err(|err| format!("Installazione pacchetti interrotta: {err}"))?;
+    pulse.stop();
     if status.success() {
         emit(app, "packages", "Motori Python installati", end);
         Ok(())

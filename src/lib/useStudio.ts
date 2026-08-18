@@ -14,7 +14,6 @@ import {
   type LangCode,
   type ListedVideo,
   type PreparePart,
-  type PrepareProgress,
   type QualityPreset,
   type ScriptFile,
   type ScriptSegment,
@@ -26,7 +25,9 @@ import {
   exportOutput,
   exportSource,
   extractAudio,
+  importDavinci,
   inspectVideos,
+  openPath,
   pickOutputDir,
   pickVideoFiles,
   prepareModels,
@@ -43,6 +44,7 @@ import {
   failedCount,
   processedMediaSecs,
   qualityInfo,
+  wantsTranslation,
   workspaceMode,
   type NavId,
   type RunPhase,
@@ -101,8 +103,14 @@ export function useStudio() {
   workingRef.current = working;
 
   const locked = adding || working;
-  const appReady =
-    Boolean(engine?.pythonOk && engine?.whisperOk && engine?.modelsReady) && !prepare?.active;
+  const needsTranslation = wantsTranslation(spokenLang, outputLang);
+  const engineReady = Boolean(
+    engine?.pythonOk &&
+      engine?.whisperOk &&
+      engine?.whisperReady &&
+      (!needsTranslation || (engine.translateOk && engine.translateReady)),
+  );
+  const appReady = engineReady && !prepare?.active;
   const terms = useMemo(() => parseTerms(glossary), [glossary]);
   const progress = overallProgress(videos);
   const mode = workspaceMode(videos, working);
@@ -129,6 +137,33 @@ export function useStudio() {
 
   const log = useCallback((line: string) => {
     setLogs((current) => [...current.slice(-180), `${new Date().toLocaleTimeString()}  ${line}`]);
+  }, []);
+
+  const applyPreviews = useCallback(async (paths: string[]) => {
+    if (paths.length === 0) {
+      return;
+    }
+    try {
+      const previews = await previewVideos(paths);
+      setVideos((current) =>
+        current.map((video) => {
+          const item = previews.find((entry) => samePath(entry.videoPath, video.path));
+          if (!item) {
+            return video;
+          }
+          if (item.frames.length === 0 && item.durationSecs == null) {
+            return video;
+          }
+          return {
+            ...video,
+            frames: item.frames.length > 0 ? item.frames : video.frames,
+            durationSecs: item.durationSecs ?? video.durationSecs,
+          };
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const refreshEngine = useCallback(async () => {
@@ -168,7 +203,13 @@ export function useStudio() {
         });
         const status = await engineStatus(quality);
         setEngine(status);
-        if (result.modelsReady || status.modelsReady) {
+        if (
+          (parts === "whisper" && result.whisperReady) ||
+          (parts === "translate" && result.translateReady) ||
+          result.modelsReady ||
+          (result.whisperReady && (!needsTranslation || result.translateReady)) ||
+          (status.whisperReady && (!needsTranslation || status.translateReady))
+        ) {
           toast("success", tr("toastModelsReady"));
         } else {
           setBootError(tr("toastModelsFail"));
@@ -188,7 +229,7 @@ export function useStudio() {
         prepareLock = false;
       }
     },
-    [quality, toast, tr, log],
+    [quality, toast, tr, log, needsTranslation],
   );
 
   const deferModels = useCallback(() => {
@@ -198,8 +239,8 @@ export function useStudio() {
 
   const retrySetup = useCallback(() => {
     autoTriedRef.current = false;
-    void downloadModels("all");
-  }, [downloadModels]);
+    void downloadModels(needsTranslation ? "all" : "whisper");
+  }, [downloadModels, needsTranslation]);
 
   const copyText = useCallback(
     async (text: string, title: string) => {
@@ -208,6 +249,53 @@ export function useStudio() {
         toast("success", title);
       } catch {
         toast("error", tr("toastCopyFail"), text);
+      }
+    },
+    [toast, tr],
+  );
+
+  const openFolder = useCallback(
+    async (path?: string | null) => {
+      if (!path) {
+        toast("error", tr("folderOpenFail"));
+        return;
+      }
+      try {
+        await openPath(path);
+        toast("success", tr("folderOpened"));
+      } catch (error) {
+        toast("error", tr("folderOpenFail"), error instanceof Error ? error.message : String(error));
+      }
+    },
+    [toast, tr],
+  );
+
+  const importToDavinci = useCallback(
+    async (video: ListedVideo) => {
+      const srt = video.outputSrtPath || video.srtPath;
+      if (!srt) {
+        toast("error", tr("davinciFallback"));
+        return;
+      }
+      toast("info", tr("davinciWorking"));
+      try {
+        const result = await importDavinci(srt, video.path);
+        if (result.ok) {
+          toast("success", tr("davinciImported"), result.message ?? undefined);
+          return;
+        }
+        toast("warning", tr("davinciFallback"), result.message ?? undefined);
+      } catch (error) {
+        try {
+          await openPath(srt);
+        } catch {
+          /* ignore */
+        }
+        toast(
+          "warning",
+          tr("davinciFallback"),
+          error instanceof Error ? error.message : String(error),
+        );
       }
     },
     [toast, tr],
@@ -229,23 +317,7 @@ export function useStudio() {
         }
         const incoming = result.videos.map((video) => video.path);
         if (incoming.length > 0) {
-          void previewVideos(incoming)
-            .then((previews) => {
-              setVideos((current) =>
-                current.map((video) => {
-                  const item = previews.find((entry) => samePath(entry.videoPath, video.path));
-                  if (!item) {
-                    return video;
-                  }
-                  return {
-                    ...video,
-                    frames: item.frames.length > 0 ? item.frames : video.frames,
-                    durationSecs: item.durationSecs ?? video.durationSecs,
-                  };
-                }),
-              );
-            })
-            .catch(() => undefined);
+          void applyPreviews(incoming);
         }
         if (result.skipped.length > 0) {
           toast(
@@ -266,7 +338,7 @@ export function useStudio() {
         setAdding(false);
       }
     },
-    [toast, tr],
+    [applyPreviews, toast, tr],
   );
 
   useEffect(() => {
@@ -279,7 +351,7 @@ export function useStudio() {
 
   useEffect(() => {
     autoTriedRef.current = false;
-  }, [quality]);
+  }, [quality, needsTranslation]);
 
   useEffect(() => {
     void refreshEngine();
@@ -292,15 +364,20 @@ export function useStudio() {
     if (preparingRef.current || workingRef.current) {
       return;
     }
-    if (engine.pythonOk && engine.whisperOk && engine.modelsReady) {
+    const ready =
+      engine.pythonOk &&
+      engine.whisperOk &&
+      engine.whisperReady &&
+      (!needsTranslation || (engine.translateOk && engine.translateReady));
+    if (ready) {
       return;
     }
     if (autoTriedRef.current) {
       return;
     }
     autoTriedRef.current = true;
-    void downloadModels("all");
-  }, [engine, downloadModels]);
+    void downloadModels(needsTranslation ? "all" : "whisper");
+  }, [engine, downloadModels, needsTranslation]);
 
   useEffect(() => {
     if (!scriptPath) {
@@ -377,7 +454,9 @@ export function useStudio() {
 
     listen<ExtractProgress>("extract-progress", (event) => {
       const payload = event.payload;
-      log(`${payload.status}: ${payload.message}`);
+      if (payload.status !== "extracting") {
+        log(`${payload.status}: ${payload.message}`);
+      }
       setVideos((current) =>
         current.map((video) => {
           if (!samePath(video.path, payload.videoPath)) {
@@ -430,38 +509,11 @@ export function useStudio() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
 
-    listen<PrepareProgress>("prepare-progress", (event) => {
-      const payload = event.payload;
-      if (payload.message) {
-        log(`${payload.part}: ${payload.message}`);
-      }
-      setPrepare({
-        active: payload.status !== "done" && payload.status !== "error",
-        part: payload.part,
-        message: payload.message,
-        percent: payload.percent ?? 0,
-      });
-    }).then((fn) => {
-      if (disposed) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [log]);
-
-  useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
-
     listen<TranscribeProgress>("transcribe-progress", (event) => {
       const payload = event.payload;
-      log(`${payload.status}: ${payload.message}`);
+      if (payload.status !== "transcribing") {
+        log(`${payload.status}: ${payload.message}`);
+      }
       setVideos((current) =>
         current.map((video) => {
           if (!samePath(video.path, payload.videoPath)) {
@@ -518,7 +570,9 @@ export function useStudio() {
 
     listen<ExportProgress>("export-progress", (event) => {
       const payload = event.payload;
-      log(`${payload.status}: ${payload.message}`);
+      if (payload.status !== "exporting") {
+        log(`${payload.status}: ${payload.message}`);
+      }
       setVideos((current) =>
         current.map((video) => {
           if (!samePath(video.path, payload.videoPath)) {
@@ -576,7 +630,9 @@ export function useStudio() {
 
     listen<TranslateProgress>("translate-progress", (event) => {
       const payload = event.payload;
-      log(`${payload.status}: ${payload.message}`);
+      if (payload.status !== "translating") {
+        log(`${payload.status}: ${payload.message}`);
+      }
       setVideos((current) =>
         current.map((video) => {
           if (!samePath(video.path, payload.videoPath)) {
@@ -633,7 +689,9 @@ export function useStudio() {
 
     listen<ExportProgress>("export-output-progress", (event) => {
       const payload = event.payload;
-      log(`${payload.status}: ${payload.message}`);
+      if (payload.status !== "exporting") {
+        log(`${payload.status}: ${payload.message}`);
+      }
       setVideos((current) =>
         current.map((video) => {
           if (!samePath(video.path, payload.videoPath)) {
@@ -753,11 +811,14 @@ export function useStudio() {
         toast("error", tr("toastEngineFfmpeg"), status.ffmpegPath ?? undefined);
         return;
       }
-      if (!status.whisperOk) {
+      if (!status.whisperOk || !status.whisperReady) {
         toast("error", tr("toastEngineWhisper"));
+        if (!preparingRef.current) {
+          void downloadModels("whisper");
+        }
         return;
       }
-      if (!status.modelsReady) {
+      if (needsTranslation && (!status.translateOk || !status.translateReady)) {
         toast("warning", tr("toastModelsFirst"));
         if (!preparingRef.current) {
           void downloadModels("all");
@@ -793,6 +854,9 @@ export function useStudio() {
               outputSrtPath: undefined,
               bundlePath: undefined,
               trlPath: undefined,
+              skipTranslation: undefined,
+              spokenCode: undefined,
+              outputCode: undefined,
               message: undefined,
             }
           : video,
@@ -820,6 +884,11 @@ export function useStudio() {
           };
         }),
       );
+
+      const needFrames = result.items
+        .filter((item) => !item.error)
+        .map((item) => item.videoPath);
+      void applyPreviews(needFrames);
 
       if (cancelRef.current) {
         toast("info", tr("toastStoppedAudio"));
@@ -898,25 +967,93 @@ export function useStudio() {
         return;
       }
 
-      const translateJobs = transcript.items.flatMap((item) =>
-        item.jsonPath && !item.error
-          ? [
-              {
-                videoPath: item.videoPath,
-                jsonPath: item.jsonPath,
-                ...(spokenLang !== "auto" ? { sourceLanguage: spokenLang } : {}),
-              },
-            ]
-          : [],
+      const exportedOk = exported.items.filter((item) => !item.error && item.srtPath);
+      const skipItems = exportedOk.filter(
+        (item) => !wantsTranslation(spokenLang, outputLang, item.language),
       );
+      const translateJobs = exportedOk
+        .filter((item) => wantsTranslation(spokenLang, outputLang, item.language))
+        .flatMap((item) => {
+          const json = transcript.items.find((entry) => samePath(entry.videoPath, item.videoPath));
+          return json?.jsonPath && !json.error
+            ? [
+                {
+                  videoPath: item.videoPath,
+                  jsonPath: json.jsonPath,
+                  ...(spokenLang !== "auto" ? { sourceLanguage: spokenLang } : {}),
+                },
+              ]
+            : [];
+        });
+
+      if (skipItems.length > 0) {
+        setVideos((current) =>
+          current.map((video) => {
+            const item = skipItems.find((entry) => samePath(entry.videoPath, video.path));
+            if (!item) {
+              return video;
+            }
+            return {
+              ...video,
+              status: "translated",
+              skipTranslation: true,
+              folderPath: item.folderPath ?? video.folderPath,
+              txtPath: item.txtPath ?? video.txtPath,
+              srtPath: item.srtPath ?? video.srtPath,
+              outputSrtPath: item.srtPath ?? video.srtPath,
+              bundlePath: video.jsonPath,
+              spokenCode: item.language ?? video.spokenCode,
+              outputCode: item.language ?? outputLang,
+              percent: 100,
+              error: undefined,
+            };
+          }),
+        );
+        for (const item of skipItems) {
+          const video = batch.find((entry) => samePath(entry.path, item.videoPath));
+          if (video) {
+            toast("success", tr("toastCompleted", { name: video.name }));
+          }
+        }
+      }
+
       if (translateJobs.length === 0) {
-        toast("error", tr("toastNothingTranslate"));
+        const failed =
+          result.items.filter((item) => item.error).length +
+          transcript.items.filter((item) => item.error).length +
+          exported.items.filter((item) => item.error).length;
+        const ok = skipItems.length;
+        const snapshot: HistoryEntry[] = skipItems.map((item) => {
+          const video = batch.find((entry) => samePath(entry.path, item.videoPath));
+          return {
+            id: `${item.videoPath}-${Date.now()}`,
+            name: video?.name ?? item.videoPath,
+            at: Date.now(),
+            ok: true,
+            spoken: item.language ?? undefined,
+            output: item.language ?? outputLang,
+          };
+        });
+        setHistory((current) => {
+          let next = current;
+          for (const entry of snapshot) {
+            next = pushHistory(next, entry);
+          }
+          return next;
+        });
+        if (failed === 0) {
+          if (ok > 1) {
+            toast("success", tr("toastManyDone", { n: ok }));
+          }
+        } else {
+          toast("warning", tr("toastWithErrors"), tr("toastOkCount", { n: ok }));
+        }
         return;
       }
 
       const translateReady = await engineStatus(quality);
       setEngine(translateReady);
-      if (!translateReady.translateOk && spokenLang !== outputLang) {
+      if (!translateReady.translateOk || !translateReady.translateReady) {
         toast("error", tr("toastEngineTranslate"));
         return;
       }
@@ -935,6 +1072,7 @@ export function useStudio() {
           return {
             ...video,
             status: "translating",
+            skipTranslation: false,
             trlPath: item.trlPath ?? undefined,
             spokenCode: item.sourceLanguage ?? video.spokenCode,
             outputCode: item.targetLanguage ?? outputLang,
@@ -971,6 +1109,7 @@ export function useStudio() {
           return {
             ...video,
             status: "translated",
+            skipTranslation: false,
             folderPath: item.folderPath ?? video.folderPath,
             outputSrtPath: item.srtPath ?? undefined,
             bundlePath: item.jsonPath ?? undefined,
@@ -997,9 +1136,20 @@ export function useStudio() {
         exported.items.filter((item) => item.error).length +
         translated.items.filter((item) => item.error).length +
         packed.items.filter((item) => item.error).length;
-      const ok = packed.items.filter((item) => !item.error).length;
+      const ok = packed.items.filter((item) => !item.error).length + skipItems.length;
 
       const snapshot: HistoryEntry[] = [];
+      for (const item of skipItems) {
+        const video = batch.find((entry) => samePath(entry.path, item.videoPath));
+        snapshot.push({
+          id: `${item.videoPath}-${Date.now()}`,
+          name: video?.name ?? item.videoPath,
+          at: Date.now(),
+          ok: true,
+          spoken: item.language ?? undefined,
+          output: item.language ?? outputLang,
+        });
+      }
       for (const item of packed.items) {
         const translatedItem = translated.items.find((entry) =>
           samePath(entry.videoPath, item.videoPath),
@@ -1129,6 +1279,7 @@ export function useStudio() {
     prepare,
     bootError,
     appReady,
+    needsTranslation,
     downloadModels,
     deferModels,
     retrySetup,
@@ -1152,6 +1303,8 @@ export function useStudio() {
     setClearHistoryOpen,
     toast,
     copyText,
+    openFolder,
+    importToDavinci,
     addPaths,
     onPickFiles,
     onPickOutput,

@@ -50,7 +50,7 @@ export const QUALITY_PRESETS: QualityInfo[] = [
   {
     id: "balanced",
     label: "Balanced",
-    hint: "Best for long interviews.",
+    hint: "Best for long videos.",
     asr: "Whisper small",
     beam: 5,
     vad: true,
@@ -185,7 +185,25 @@ function rank(status: VideoJobStatus): number {
   }
 }
 
-export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
+export function wantsTranslation(
+  spoken: string,
+  output: string,
+  detected?: string | null,
+): boolean {
+  const dst = output.trim().toLowerCase();
+  const src = (detected || "").trim().toLowerCase();
+  if (src) {
+    return src !== dst;
+  }
+  const chosen = spoken.trim().toLowerCase();
+  if (chosen && chosen !== "auto") {
+    return chosen !== dst;
+  }
+  return true;
+}
+
+export function jobStages(video: ListedVideo, lang: UiLang, translate = true): JobStage[] {
+  const showTranslate = translate && !video.skipTranslation;
   if (video.status === "error") {
     const failed: StageKey =
       video.message?.toLowerCase().includes("ffmpeg") ||
@@ -199,7 +217,7 @@ export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
               video.error?.toLowerCase().includes("srt")
             ? "subtitles"
             : "transcription";
-    return [
+    const stages: JobStage[] = [
       {
         key: "audio",
         label: t(lang, "stageAudio"),
@@ -215,23 +233,25 @@ export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
               ? "pending"
               : "completed",
       },
-      {
+    ];
+    if (showTranslate) {
+      stages.push({
         key: "translation",
         label: t(lang, "stageTranslation"),
         status: failed === "translation" ? "failed" : "pending",
-      },
-      {
-        key: "subtitles",
-        label: t(lang, "stageSubtitles"),
-        status: failed === "subtitles" ? "failed" : "pending",
-      },
-    ];
+      });
+    }
+    stages.push({
+      key: "subtitles",
+      label: t(lang, "stageSubtitles"),
+      status: failed === "subtitles" ? "failed" : "pending",
+    });
+    return stages;
   }
 
   const r = rank(video.status);
   const pct = video.percent ?? 0;
-
-  return [
+  const stages: JobStage[] = [
     {
       key: "audio",
       label: t(lang, "stageAudio"),
@@ -257,7 +277,9 @@ export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
             ? 100
             : undefined,
     },
-    {
+  ];
+  if (showTranslate) {
+    stages.push({
       key: "translation",
       label: t(lang, "stageTranslation"),
       status:
@@ -269,14 +291,34 @@ export function jobStages(video: ListedVideo, lang: UiLang): JobStage[] {
             ? "running"
             : "completed",
       percent: video.status === "translating" ? pct : r >= 8 ? 100 : undefined,
-    },
-    {
+    });
+    stages.push({
       key: "subtitles",
       label: t(lang, "stageSubtitles"),
       status: r >= 8 ? "completed" : r >= 7 ? "preparing" : "pending",
       percent: r >= 8 ? 100 : undefined,
-    },
-  ];
+    });
+  } else {
+    stages.push({
+      key: "subtitles",
+      label: t(lang, "stageSubtitles"),
+      status:
+        r >= 8 || video.status === "exported"
+          ? "completed"
+          : video.status === "exporting"
+            ? "running"
+            : r >= 4
+              ? "preparing"
+              : "pending",
+      percent:
+        video.status === "exporting"
+          ? pct
+          : r >= 8 || video.status === "exported"
+            ? 100
+            : undefined,
+    });
+  }
+  return stages;
 }
 
 export function workspaceMode(

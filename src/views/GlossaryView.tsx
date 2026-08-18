@@ -3,6 +3,7 @@ import type { GlossaryPreset } from "../lib/glossary";
 import { loadPresets, parseTerms, savePresets } from "../lib/glossary";
 import type { Msg } from "../lib/i18n";
 import { Button } from "../ui/Button";
+import { Popover } from "../ui/Popover";
 
 type Tr = (key: Msg, vars?: Record<string, string | number>) => string;
 
@@ -17,8 +18,9 @@ export function GlossaryView({ terms, locked, tr, onChange }: Props) {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [presetName, setPresetName] = useState("Caravaggio");
+  const [presetName, setPresetName] = useState("");
   const [presets, setPresets] = useState<GlossaryPreset[]>(() => loadPresets());
+  const [chipMenu, setChipMenu] = useState<{ x: number; y: number; index: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function addTerm(raw: string) {
@@ -83,7 +85,15 @@ export function GlossaryView({ terms, locked, tr, onChange }: Props) {
 
       <div className="ui-chips">
         {terms.map((term, index) => (
-          <span key={`${term}-${index}`} className="ui-chip">
+          <span
+            key={`${term}-${index}`}
+            className="ui-chip"
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setChipMenu({ x: event.clientX, y: event.clientY, index });
+            }}
+          >
             {editing === index ? (
               <input
                 autoFocus
@@ -124,6 +134,21 @@ export function GlossaryView({ terms, locked, tr, onChange }: Props) {
           </span>
         ))}
       </div>
+      <Popover open={chipMenu != null} x={chipMenu?.x} y={chipMenu?.y} onClose={() => setChipMenu(null)}>
+        <button
+          type="button"
+          className="is-danger"
+          disabled={locked}
+          onClick={() => {
+            if (chipMenu) {
+              onChange(terms.filter((_, i) => i !== chipMenu.index));
+            }
+            setChipMenu(null);
+          }}
+        >
+          {tr("remove")}
+        </button>
+      </Popover>
 
       <div className="panel" style={{ marginTop: 24 }}>
         <div className="glossary-add">

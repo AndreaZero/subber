@@ -1,12 +1,12 @@
-# Video Sub — Caravaggio
+# Video Sub
 
-App desktop locale (Windows + macOS): interviste lunghe → trascrizione fedele → traduzione editoriale → SRT per DaVinci Resolve.
+App desktop locale (Windows + macOS): qualsiasi video parlato → trascrizione fedele → traduzione editoriale opzionale → SRT per DaVinci Resolve.
 
-Default UI: lingua parlata **Francese** (documentario Caravaggio), sottotitoli **Italiano**. Il programma accetta qualsiasi lingua Whisper, non è vincolato al francese. I file usano il codice lingua reale: `{nome}.{lang}.txt`, `{nome}.{lang}.srt`.
+Default UI: lingua parlata **Rileva automaticamente**, sottotitoli **Italiano**. Accetta qualsiasi lingua Whisper. I file usano il codice lingua reale: `{nome}.{lang}.txt`, `{nome}.{lang}.srt`.
 
 ## Pipeline (ordine fisso)
 
-`video → FFmpeg audio → faster-whisper FR → traduzione FR→IT su blocchi (prev + curr + next) → formatter SRT → export`
+`video → FFmpeg audio → faster-whisper (task=transcribe) → traduzione contestuale su blocchi (prev + curr + next) se le lingue differiscono → formatter SRT → export`
 
 Mai `task=translate` di Whisper come unico output. Mai tradurre l’audio diretto in italiano.
 
@@ -22,7 +22,7 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
 2. **Fatto:** estrazione audio FFmpeg (WAV 16 kHz mono)  
 3. **Fatto:** trascrizione + timestamp (faster-whisper, `task=transcribe`, qualsiasi lingua)  
 4. **Fatto:** export `{lang}.txt` / `{lang}.srt`  
-5. **Fatto:** traduzione contestuale (default FR→IT, lingua output selezionabile)  
+5. **Fatto:** traduzione contestuale (default parlato auto, sottotitoli IT, lingue selezionabili)  
 6. **Fatto:** Formatter SRT nella lingua di output  
 7. **Fatto:** Export `{output}.srt` + `.json` in cartella per video  
 8. **Fatto:** Glossario (ASR + traduzione)  
@@ -81,9 +81,15 @@ Tauri 2 + React + TypeScript + Rust. Worker Python (faster-whisper) dal task 3. 
   - Formatter: `worker/subtitles.py`
 
 - `preview_videos(videoPaths: string[])` → `{ videoPath, frames[], durationSecs }[]`
-  - Estrae fino a 3 fotogrammi JPEG (anteprima) all’aggiunta del video
+  - Estrae fino a 3 fotogrammi JPEG (anteprima) all’aggiunta del video. I file stanno in `{appData}/previews/`
+- `open_path(path)` → `{ ok, revealed, message }`
+  - Apre la cartella in Explorer/Finder, o seleziona il file
+- `import_davinci(srtPath, videoPath?)` → `{ ok, revealed, message }`
+  - Importa SRT (e video se c’è) nel Media Pool di DaVinci Resolve via scripting. Se Resolve non è aperto o non c’è un progetto, apre la cartella dell’SRT
 - `read_script(path)` → `{ sourceLanguage, targetLanguage, segments[] }`
   - Legge `.asr.json`, `.trl.json` o `{stem}.json` per mostrare testo e traduzione in app
+
+Se lingua parlata = lingua sottotitoli (e non `auto`), la traduzione NLLB non parte e non si scarica. L’SRT sorgente vale anche per DaVinci.
 
 ## FFmpeg (non scaricato dall’app)
 

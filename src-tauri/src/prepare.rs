@@ -3,6 +3,10 @@ use serde_json::Value;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 use crate::python;
@@ -47,6 +51,60 @@ struct WorkerProgress {
 
 pub fn emit_progress(app: &AppHandle, payload: PrepareProgress) {
     let _ = app.emit("prepare-progress", payload);
+}
+
+pub struct Pulse {
+    stop: Arc<AtomicBool>,
+    join: Option<JoinHandle<()>>,
+}
+
+impl Pulse {
+    pub fn start(app: &AppHandle, part: &str, message: &str, from: f32, cap: f32) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = stop.clone();
+        let handle = app.clone();
+        let part = part.to_string();
+        let message = message.to_string();
+        let join = thread::spawn(move || {
+            let started = Instant::now();
+            while !flag.load(Ordering::Relaxed) {
+                let elapsed = started.elapsed().as_secs_f32();
+                let drift = 1.0 - (-elapsed / 18.0).exp();
+                let pct = (from + (cap - from) * drift).min(cap);
+                emit_progress(
+                    &handle,
+                    PrepareProgress {
+                        status: "downloading".into(),
+                        part: part.clone(),
+                        message: message.clone(),
+                        percent: Some(pct),
+                    },
+                );
+                thread::sleep(Duration::from_millis(700));
+            }
+        });
+        Self {
+            stop,
+            join: Some(join),
+        }
+    }
+
+    pub fn stop(mut self) {
+        self.halt();
+    }
+
+    fn halt(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+    }
+}
+
+impl Drop for Pulse {
+    fn drop(&mut self) {
+        self.halt();
+    }
 }
 
 fn run_prepare(
