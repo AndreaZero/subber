@@ -1,4 +1,4 @@
-# Video Sub
+# Subber
 
 App desktop locale (Windows + macOS): qualsiasi video parlato → trascrizione fedele → traduzione editoriale opzionale → SRT per DaVinci Resolve.
 

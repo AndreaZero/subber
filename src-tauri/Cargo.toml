@@ -1,5 +1,5 @@
 [package]
-name = "video-sub"
+name = "subber"
 version = "0.1.0"
 description = "Trascrizione locale, traduzione e sottotitoli SRT da qualsiasi video"
 authors = ["you"]

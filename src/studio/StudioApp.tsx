@@ -169,7 +169,7 @@ export default function StudioApp() {
         <div className="brand">
           <img className="brand-mark" src="/icon.png" alt="" width={32} height={32} />
           <div>
-            <b>Video Sub</b>
+            <b>Subber</b>
             <span>{studio.project.name}</span>
           </div>
         </div>

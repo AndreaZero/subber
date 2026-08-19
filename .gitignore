@@ -10,6 +10,8 @@ dist
 dist-ssr
 *.local
 
+website/
+
 .vscode/*
 !.vscode/extensions.json
 .idea
