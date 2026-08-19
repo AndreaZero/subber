@@ -1758,9 +1758,9 @@ export function useStudio() {
           void openFolder(first);
         }
       } else if (ok > 0) {
-        toast("warning", tr("toastWithErrors"), failed[0]?.error);
+        toast("warning", tr("toastWithErrors"), failed[0]?.error ?? undefined);
       } else {
-        toast("error", tr("toastBurnFail"), failed[0]?.error);
+        toast("error", tr("toastBurnFail"), failed[0]?.error ?? undefined);
       }
     } catch (error) {
       toast("error", tr("toastBurnFail"), error instanceof Error ? error.message : String(error));

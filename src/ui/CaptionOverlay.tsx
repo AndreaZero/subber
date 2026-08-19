@@ -49,7 +49,6 @@ export function CaptionOverlay({ text, style, editable, onChange }: Props) {
       }
       const video = host.parentElement?.querySelector("video");
       const image = host.parentElement?.querySelector("img");
-      const media = video || image;
       const width = host.clientWidth;
       const height = host.clientHeight;
       let aspect = 16 / 9;
